@@ -3,14 +3,16 @@
     -webkit-transform: scale(1);
 	position: absolute;
 	top: 0;
-    left: 30px;
+    right: 0;
+    /* left: 30px */
 	z-index: 9;
     background: rgba(0,0,0,0.05);
     overflow: hidden;
+    border-left: 2px solid rgba(0,0,0,0.4);
 }
 
 .simple_sketch {
-    position: relative;
+    position: absolute;
 }
 
 .tools {

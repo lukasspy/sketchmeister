@@ -1,14 +1,14 @@
-/*jslint vars: true, plusplus: true, devel: true, nomen: true, regexp: true, indent: 4, maxerr: 50 */
-/*global define, $, brackets, window, CodeMirror, document */
+/*jslint vars: true, plusplus: true, devel: true, nomen: true, regexp: true, indent: 4, maxerr: 50, browser: true*/
+/*global define, $, brackets, window, CodeMirror, document, Kinetic, addImageToStage, addAnchor */
 
 define(function (require, exports, module) {
 	"use strict";
-
+   
 	require('jquery-ui-1.9.2.custom.min');
 	require('runmode');
     require('sketch');
     require('kinetic-v4.3.1.min');
-    //require('kinetic-functions');
+    require('kinetic-functions');
 
 	var CommandManager = brackets.getModule("command/CommandManager"),
 		EditorManager = brackets.getModule("editor/EditorManager"),
@@ -20,13 +20,16 @@ define(function (require, exports, module) {
 		Menus = brackets.getModule("command/Menus"),
 		COMMAND_ID = "me.lukasspy.brackets.sketchmeister";
 
+    var stage;
+    var imageLayer;
+    
     var _sketchingAreaIdCounter = 0;
     
 	var loadCSSPromise = ExtensionUtils.loadStyleSheet(module, 'main.css');
 	var active = false;
     var sketchIconActive = require.toUrl('./sketch_button_on.png');
     var sketchIconDeactive = require.toUrl('./sketch_button_off.png');
-    var testImage = require.toUrl('./brackets-minimap.png');
+    var testImage = require.toUrl('./test.png');
     
     var _activeEditor = null;
     var _activeDocument = null;
@@ -34,231 +37,86 @@ define(function (require, exports, module) {
     var _activeSketchingArea = null;
     var _codeMirror = null;
     
+    
+    
+    /*----- sketch.js functionen -----*/
+    
+    function sketchGetURL() {
+        var canvas = $('#simple_sketch-' + _activeSketchingArea.id)[0];
+        var sketchDataURL = canvas.toDataURL();
+        console.log(canvas);
+    }
+    
     /*----- functions for kinetic drag/resize ------*/
-    function update(activeAnchor) {
-        var group = activeAnchor.getParent();
-
-        var topLeft = group.get('.topLeft')[0];
-        var topRight = group.get('.topRight')[0];
-        var bottomRight = group.get('.bottomRight')[0];
-        var bottomLeft = group.get('.bottomLeft')[0];
-        var image = group.get('.image')[0];
-
-        var anchorX = activeAnchor.getX();
-        var anchorY = activeAnchor.getY();
-
-        // update anchor positions
-        switch (activeAnchor.getName()) {
-          case 'topLeft':
-            topRight.setY(anchorY);
-            bottomLeft.setX(anchorX);
-            break;
-          case 'topRight':
-            topLeft.setY(anchorY);
-            bottomRight.setX(anchorX);
-            break;
-          case 'bottomRight':
-            bottomLeft.setY(anchorY);
-            topRight.setX(anchorX); 
-            break;
-          case 'bottomLeft':
-            bottomRight.setY(anchorY);
-            topLeft.setX(anchorX); 
-            break;
-        }
-
-        image.setPosition(topLeft.getPosition());
-
-        var width = topRight.getX() - topLeft.getX();
-        var height = bottomLeft.getY() - topLeft.getY();
-        if(width && height) {
-          image.setSize(width, height);
-        }
-      }
-      function addAnchor(group, x, y, name) {
-        var stage = group.getStage();
-        var layer = group.getLayer();
-
-        var anchor = new Kinetic.Circle({
-          x: x,
-          y: y,
-          stroke: '#666',
-          fill: '#ddd',
-          strokeWidth: 1,
-          radius: 8,
-          name: name,
-          draggable: true,
-          dragOnTop: false
+    
+    function createStage(sketchingArea) {
+        stage = new Kinetic.Stage({
+            container: 'overlay-' + sketchingArea.id,
+            width: sketchingArea.width,
+            height: sketchingArea.height
         });
-
-        anchor.on('dragmove', function() {
-          update(this);
-          layer.draw();
+        imageLayer = new Kinetic.Layer({
+            id: 'images'
         });
-        anchor.on('mousedown touchstart', function() {
-          group.setDraggable(false);
-          this.moveToTop();
-        });
-        anchor.on('dragend', function() {
-          group.setDraggable(true);
-          layer.draw();
-        });
-        // add hover styling
-        anchor.on('mouseover', function() {
-          var layer = this.getLayer();
-          document.body.style.cursor = 'pointer';
-          this.setStrokeWidth(4);
-          layer.draw();
-        });
-        anchor.on('mouseout', function() {
-          var layer = this.getLayer();
-          document.body.style.cursor = 'default';
-          this.setStrokeWidth(2);
-          layer.draw();
-        });
-
-        group.add(anchor);
-      }
-      function loadImages(sources, callback) {
-        var images = {};
-        var loadedImages = 0;
-        var numImages = 0;
-        for(var src in sources) {
-          numImages++;
-        }
-        for(var src in sources) {
-          images[src] = new Image();
-          images[src].onload = function() {
-            if(++loadedImages >= numImages) {
-              callback(images);
-            }
-          };
-          images[src].src = sources[src];
-        }
-      }
-    function addImageToStage(imageToAdd) { 
-        console.log('found');
+        stage.add(imageLayer);
+        console.log('stage done: ' +  stage + ' layer done: ' + imageLayer);
+        //stage.setAbsolutePosition(widthOfEditorFull, 0);
+    }
+    
+    function addImageToStage(imageToAdd) {
         var helpImage = new Image();
-        helpImage.src = imageToAdd.newImage;
-        var widthOfImage = helpImage.width;
-        var heightOfImage = helpImage.height;
-        console.log(widthOfImage + " and " + heightOfImage);
-        
-        var stage = new Kinetic.Stage({
-          container: 'overlay-' + _activeSketchingArea.id,
-          width: 578,
-          height: 400
-        });
+        helpImage.src =  imageToAdd;
+        //bild muss erst in den DOM geschrieben werden und dann kann die Größe ermittelt werden .. 
+        var widthOfImage = helpImage.naturalWidth;
+        var heightOfImage = helpImage.naturalHeight;
+
+        var widthResized = 200;
+        var heightResized = 150;
         
         var imageGroup = new Kinetic.Group({
-          x: 100,
-          y: 100,
-          draggable: true
+            x: 0,
+            y: 0,
+            draggable: true
         });
-        var layer = new Kinetic.Layer();
-        layer.add(imageGroup);
-        stage.add(layer);
-        
-        
-        
-        // darth vader
+
+        // new Image added to group
         var newImg = new Kinetic.Image({
-          x: 0,
-          y: 0,
-          image: imageToAdd.newImage,
-          width: widthOfImage,
-          height: heightOfImage,
-          name: 'image'
+            x: 40,
+            y: 40,
+            image: helpImage,
+            width: widthResized,
+            height: 150,
+            name: 'image'
         });
-
+    
         imageGroup.add(newImg);
+        imageLayer.add(imageGroup);
+        
         addAnchor(imageGroup, 0, 0, 'topLeft');
-        addAnchor(imageGroup, 200, 0, 'topRight');
-        addAnchor(imageGroup, 200, 138, 'bottomRight');
-        addAnchor(imageGroup, 0, 138, 'bottomLeft');
-
-        imageGroup.on('dragstart', function() {
-          this.moveToTop();
+        addAnchor(imageGroup, widthResized, 0, 'topRight');
+        addAnchor(imageGroup, widthResized, heightResized, 'bottomRight');
+        addAnchor(imageGroup, 0, heightResized, 'bottomLeft');
+    
+        imageGroup.on('dragstart', function () {
+            this.moveToTop();
         });
         stage.draw();
     }
-    
-    function initStage(images) {
-        var stage = new Kinetic.Stage({
-          container: 'overlay-' + _activeSketchingArea.id,
-          width: 578,
-          height: 400
-        });
-        var darthVaderGroup = new Kinetic.Group({
-          x: 270,
-          y: 100,
-          draggable: true
-        });
-        var yodaGroup = new Kinetic.Group({
-          x: 100,
-          y: 110,
-          draggable: true
-        });
-        var layer = new Kinetic.Layer();
 
-        /*
-         * go ahead and add the groups
-         * to the layer and the layer to the
-         * stage so that the groups have knowledge
-         * of its layer and stage
-         */
-        layer.add(darthVaderGroup);
-        layer.add(yodaGroup);
-        stage.add(layer);
-
-        // darth vader
-        var darthVaderImg = new Kinetic.Image({
-          x: 0,
-          y: 0,
-          image: images.darthVader,
-          width: 200,
-          height: 138,
-          name: 'image'
-        });
-
-        darthVaderGroup.add(darthVaderImg);
-        addAnchor(darthVaderGroup, 0, 0, 'topLeft');
-        addAnchor(darthVaderGroup, 200, 0, 'topRight');
-        addAnchor(darthVaderGroup, 200, 138, 'bottomRight');
-        addAnchor(darthVaderGroup, 0, 138, 'bottomLeft');
-
-        darthVaderGroup.on('dragstart', function() {
-          this.moveToTop();
-        });
-        // yoda
-        var yodaImg = new Kinetic.Image({
-          x: 0,
-          y: 0,
-          image: images.yoda,
-          width: 93,
-          height: 104,
-          name: 'image'
-        });
-
-        yodaGroup.add(yodaImg);
-        addAnchor(yodaGroup, 0, 0, 'topLeft');
-        addAnchor(yodaGroup, 93, 0, 'topRight');
-        addAnchor(yodaGroup, 93, 104, 'bottomRight');
-        addAnchor(yodaGroup, 0, 104, 'bottomLeft');
-
-        yodaGroup.on('dragstart', function() {
-          this.moveToTop();
-        });
-
-        stage.draw();
-      }
-
-      var sources = {
-        darthVader: sketchIconActive,
-        yoda: sketchIconDeactive
-      };
     /*----- functions for sketching area ------*/
+    function _deactivate() {
+        $(".overlay").hide();
+        $(".tools").hide();
+        $('#toggle-sketching').css('background-image', 'url("' + sketchIconDeactive + '")');
+        active = false;
+    }
     
+    function _activate() {
+        $(".overlay").show();
+        $(".tools").show();
+        $('#toggle-sketching').css('background-image', 'url("' + sketchIconActive + '")');
+        active = true;
+    }
     
     function _addSketchingTools(id) {
         $(_activeEditor.getScrollerElement()).append('<div class="tools" id="tools-' + id + '"><a href="#simple_sketch-' + id + '" data-tool="eraser">Era</a></div>');
@@ -268,10 +126,10 @@ define(function (require, exports, module) {
         $.each([3, 5, 10, 15], function () {
             $('#tools-' + id).append("<a href='#simple_sketch-" + id + "' data-tool='marker' data-size='" + this + "' style='background: transparent'>" + this + "</a> ");
         });
+        $('#tools-' + id).append("<a href='#' style='background: transparent' class='saveSketch'>save</a> ");
         $('#tools-' + id).append("<a href='#' style='background: transparent' class='addImageToStage'>add</a> ");
-        if (!active) {
-            $('#tools-' + id).hide();
-        }
+        $('#tools-' + id).append("<a href='#' style='background: transparent' class='imageLayerToTop'>Img</a> ");
+        $('#tools-' + id).append("<a href='#' style='background: transparent' class='sketchingAreaToTop'>Draw</a> ");
     }
     
     function _addToolbarIcon(id) {
@@ -281,18 +139,23 @@ define(function (require, exports, module) {
 
     function _addSketchingArea(path) {
         var id = _sketchingAreaIdCounter++;
-        var sketchingArea = {'fullPath' : path, 'id' : id, 'active' : true};
-        
         var height = $(_activeEditor.getScrollerElement()).height();
-        var width = $(_activeEditor.getScrollerElement()).width();
+        var width = $(_activeEditor.getScrollerElement()).width() / 2;
         var totalHeight = _activeEditor.totalHeight(true);
+        var sketchingArea = {'fullPath' : path, 'id' : id, 'active' : true, 'width' : width, 'height' : height};
+        
         $(_activeEditor.getScrollerElement()).append('<div class="overlay" id="overlay-' + id + '"><canvas class="simple_sketch" id="simple_sketch-' + id + '" width="' + width + '" height="' + totalHeight + '"></canvas></div>');
         $("#overlay-" + id).css('height', height + 'px');
         $("#overlay-" + id).css('width', width + 'px');
         $('#simple_sketch-' + id).sketch();
         
         _addSketchingTools(id);
+        createStage(sketchingArea);
         
+        if (!active) {
+            _deactivate();
+            console.log('wurde deaktiviert');
+        }
         var length = _documentSketchingAreas.push(sketchingArea);
         return length - 1;
 	}
@@ -357,19 +220,7 @@ define(function (require, exports, module) {
         deleteSketchingArea(sketchingAreaToDelete);
     }
     
-    function _deactivate() {
-        $(".overlay").hide();
-        $(".tools").hide();
-        $('#toggle-sketching').css('background-image', 'url("' + sketchIconDeactive + '")');
-        active = false;
-    }
-    
-    function _activate() {
-        $(".overlay").show();
-        $(".tools").show();
-        $('#toggle-sketching').css('background-image', 'url("' + sketchIconActive + '")');
-        active = true;
-    }
+
     
     function _toggleStatus() {
         if (active) {
@@ -408,6 +259,16 @@ define(function (require, exports, module) {
         _deactivate();
     }
     
+    function moveImageLayerToTop() {
+        $('.kineticjs-content').css('z-index','5'); 
+        $('.simple_sketch').css('z-index','3');
+    }
+    
+    function movesketchingAreaToTop() {
+        $('.simple_sketch').css('z-index','5');
+        $('.kineticjs-content').css('z-index','3');
+    }
+    
 	AppInit.appReady(function () {
         _addMenuItems();
         _addToolbarIcon();
@@ -416,9 +277,18 @@ define(function (require, exports, module) {
         
         var imageToAdd = {
             newImage: testImage
-        }
+        };
         $('.addImageToStage').click(function () {
             addImageToStage(testImage);
+        });
+        $('.saveSketch').click(function () {
+            //sketchGetURL();
+        });
+        $('.imageLayerToTop').click(function () {
+            moveImageLayerToTop();
+        });
+        $('.sketchingAreaToTop').click(function () {
+            movesketchingAreaToTop();
         });
         //loadImages(sources, initStage);
     });
