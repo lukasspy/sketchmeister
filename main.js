@@ -2,53 +2,54 @@
 /*global define, $, brackets, window, CodeMirror, document, Kinetic, addImageToStage, addAnchor */
 
 define(function (require, exports, module) {
-	"use strict";
-   
-	require('jquery-ui-1.9.2.custom.min');
-	require('runmode');
+    "use strict";
+
+    require('jquery-ui-1.10.0.custom.min');
+    require('runmode');
     require('sketch');
     require('kinetic-v4.3.1.min');
     require('kinetic-functions');
 
-	var CommandManager = brackets.getModule("command/CommandManager"),
-		EditorManager = brackets.getModule("editor/EditorManager"),
-		ExtensionUtils = brackets.getModule("utils/ExtensionUtils"),
-		Editor = brackets.getModule("editor/Editor").Editor,
-		DocumentManager = brackets.getModule("document/DocumentManager"),
+    var CommandManager = brackets.getModule("command/CommandManager"),
+        EditorManager = brackets.getModule("editor/EditorManager"),
+        ExtensionUtils = brackets.getModule("utils/ExtensionUtils"),
+        Editor = brackets.getModule("editor/Editor").Editor,
+        DocumentManager = brackets.getModule("document/DocumentManager"),
         AppInit = brackets.getModule("utils/AppInit"),
-		EditorUtils = brackets.getModule("editor/EditorUtils"),
-		Menus = brackets.getModule("command/Menus"),
-		COMMAND_ID = "me.lukasspy.brackets.sketchmeister";
+        Resizer = brackets.getModule("utils/Resizer"),
+        EditorUtils = brackets.getModule("editor/EditorUtils"),
+        Menus = brackets.getModule("command/Menus"),
+        COMMAND_ID = "me.lukasspy.brackets.sketchmeister";
 
     var stage;
     var imageLayer;
-    
+
     var _sketchingAreaIdCounter = 0;
-    
-	var loadCSSPromise = ExtensionUtils.loadStyleSheet(module, 'main.css');
-	var active = false;
+
+    var loadCSSPromise = ExtensionUtils.loadStyleSheet(module, 'main.css');
+    var active = false;
     var sketchIconActive = require.toUrl('./sketch_button_on.png');
     var sketchIconDeactive = require.toUrl('./sketch_button_off.png');
     var testImage = require.toUrl('./test.png');
-    
+
     var _activeEditor = null;
     var _activeDocument = null;
     var _documentSketchingAreas = [];
     var _activeSketchingArea = null;
     var _codeMirror = null;
-    
-    
-    
+
+
+
     /*----- sketch.js functionen -----*/
-    
+
     function sketchGetURL() {
         var canvas = $('#simple_sketch-' + _activeSketchingArea.id)[0];
         var sketchDataURL = canvas.toDataURL();
         console.log(canvas);
     }
-    
+
     /*----- functions for kinetic drag/resize ------*/
-    
+
     function createStage(sketchingArea) {
         stage = new Kinetic.Stage({
             container: 'overlay-' + sketchingArea.id,
@@ -59,20 +60,20 @@ define(function (require, exports, module) {
             id: 'images'
         });
         stage.add(imageLayer);
-        console.log('stage done: ' +  stage + ' layer done: ' + imageLayer);
+        console.log('stage done: ' + stage + ' layer done: ' + imageLayer);
         //stage.setAbsolutePosition(widthOfEditorFull, 0);
     }
-    
+
     function addImageToStage(imageToAdd) {
         var helpImage = new Image();
-        helpImage.src =  imageToAdd;
+        helpImage.src = imageToAdd;
         //bild muss erst in den DOM geschrieben werden und dann kann die Größe ermittelt werden .. 
         var widthOfImage = helpImage.naturalWidth;
         var heightOfImage = helpImage.naturalHeight;
 
         var widthResized = 200;
         var heightResized = 150;
-        
+
         var imageGroup = new Kinetic.Group({
             x: 0,
             y: 0,
@@ -88,15 +89,15 @@ define(function (require, exports, module) {
             height: 150,
             name: 'image'
         });
-    
+
         imageGroup.add(newImg);
         imageLayer.add(imageGroup);
-        
+
         addAnchor(imageGroup, 0, 0, 'topLeft');
         addAnchor(imageGroup, widthResized, 0, 'topRight');
         addAnchor(imageGroup, widthResized, heightResized, 'bottomRight');
         addAnchor(imageGroup, 0, heightResized, 'bottomLeft');
-    
+
         imageGroup.on('dragstart', function () {
             this.moveToTop();
         });
@@ -105,19 +106,36 @@ define(function (require, exports, module) {
 
     /*----- functions for sketching area ------*/
     function _deactivate() {
-        $(".overlay").hide();
-        $(".tools").hide();
+
+        $(".overlay").hide("slide", {
+            direction: "right",
+            easing: 'easeOutCirc'
+        }, 400);
+        $(".tools").hide("slide", {
+            direction: "right",
+            easing: 'easeOutCirc'
+        }, 400);
         $('#toggle-sketching').css('background-image', 'url("' + sketchIconDeactive + '")');
         active = false;
     }
-    
+
     function _activate() {
-        $(".overlay").show();
-        $(".tools").show();
+        $(".overlay").click(function (event) {
+            event.preventDefault();
+            return false;
+        });
+        $(".overlay").show("slide", {
+            direction: "right",
+            easing: 'easeOutCirc'
+        }, 400);
+        $(".tools").show("slide", {
+            direction: "right",
+            easing: 'easeOutCirc'
+        }, 400);
         $('#toggle-sketching').css('background-image', 'url("' + sketchIconActive + '")');
         active = true;
     }
-    
+
     function _addSketchingTools(id) {
         $(_activeEditor.getScrollerElement()).append('<div class="tools" id="tools-' + id + '"><a href="#simple_sketch-' + id + '" data-tool="eraser">Era</a></div>');
         $.each(['#f00', '#ff0', '#0f0', '#0ff', '#00f', '#f0f', '#000', '#fff'], function () {
@@ -130,8 +148,11 @@ define(function (require, exports, module) {
         $('#tools-' + id).append("<a href='#' style='background: transparent' class='addImageToStage'>add</a> ");
         $('#tools-' + id).append("<a href='#' style='background: transparent' class='imageLayerToTop'>Img</a> ");
         $('#tools-' + id).append("<a href='#' style='background: transparent' class='sketchingAreaToTop'>Draw</a> ");
+        $('#tools-' + id).append("<a href='#' style='background: transparent' class='uploadDialog'>Upl</a> ");
+        $('#tools-' + id).append("<input type='file' style='visibility:hidden;display:none' class='uploadButton'/>");
+        $('#tools-' + id).append("<a href='#' style='background: transparent' class='gallery'>Gal</a> ");
     }
-    
+
     function _addToolbarIcon(id) {
         $('#main-toolbar .buttons').prepend('<a href="#" id="toggle-sketching" title="SketchMeister"></a>');
         $('#toggle-sketching').css('background-image', 'url("' + sketchIconDeactive + '")');
@@ -142,25 +163,34 @@ define(function (require, exports, module) {
         var height = $(_activeEditor.getScrollerElement()).height();
         var width = $(_activeEditor.getScrollerElement()).width() / 2;
         var totalHeight = _activeEditor.totalHeight(true);
-        var sketchingArea = {'fullPath' : path, 'id' : id, 'active' : true, 'width' : width, 'height' : height};
-        
+        var sketchingArea = {
+            'fullPath': path,
+            'id': id,
+            'active': true,
+            'width': width,
+            'height': totalHeight
+        };
+
         $(_activeEditor.getScrollerElement()).append('<div class="overlay" id="overlay-' + id + '"><canvas class="simple_sketch" id="simple_sketch-' + id + '" width="' + width + '" height="' + totalHeight + '"></canvas></div>');
+
+        //Resizer.makeResizable($("#overlay-" + id), "horz", "left", "10", 'true', 'false');
+
         $("#overlay-" + id).css('height', height + 'px');
         $("#overlay-" + id).css('width', width + 'px');
         $('#simple_sketch-' + id).sketch();
-        
+
         _addSketchingTools(id);
         createStage(sketchingArea);
-        
+
         if (!active) {
             _deactivate();
             console.log('wurde deaktiviert');
         }
         var length = _documentSketchingAreas.push(sketchingArea);
         return length - 1;
-	}
-    
-	/* function _documentChange() {
+    }
+
+    /* function _documentChange() {
 		
         var editor = EditorManager.getCurrentFullEditor();
         $(editor).on('scroll', function(e){
@@ -176,8 +206,8 @@ define(function (require, exports, module) {
         var scrollPos = _activeEditor.getScrollPos();
         $('#overlay-' + _activeSketchingArea.id).scrollTop(scrollPos.y);
     }
-    
-	function currentDocumentChanged() {
+
+    function currentDocumentChanged() {
         _activeEditor = EditorManager.getCurrentFullEditor();
         $(_activeEditor).on("scroll", _scroll);
         _activeDocument = DocumentManager.getCurrentDocument();
@@ -197,12 +227,12 @@ define(function (require, exports, module) {
         }
         console.log(_documentSketchingAreas);
     }
-    
+
     function deleteSketchingArea(id) {
         _documentSketchingAreas.splice(id, 1);
         console.log(_documentSketchingAreas);
     }
-    
+
     function removeOverlay() {
         var _activeWorkingSet = DocumentManager.getWorkingSet();
         var sketchingAreaToDelete;
@@ -219,9 +249,9 @@ define(function (require, exports, module) {
         });
         deleteSketchingArea(sketchingAreaToDelete);
     }
-    
 
-    
+
+
     function _toggleStatus() {
         if (active) {
             _deactivate();
@@ -229,55 +259,80 @@ define(function (require, exports, module) {
             _activate();
         }
     }
-    
+
     function _addMenuItems() {
-        var MY_COMMAND_ID = "sketchmeister.toggleActivation";   // package-style naming to avoid collisions
+        var MY_COMMAND_ID = "sketchmeister.toggleActivation"; // package-style naming to avoid collisions
         CommandManager.register("Enable Sketchmeister", MY_COMMAND_ID, _toggleStatus);
-    
+
         var menu = Menus.getMenu(Menus.AppMenuBar.VIEW_MENU);
         menu.addMenuDivider();
         menu.addMenuItem(MY_COMMAND_ID);
     }
+
+    function moveToolsToTop() {
+        $('.tools').css('z-index', '5');
+    }
     
+    function toggleGallery() {
+        $('#foo').toggle();
+    }
+
+    function moveImageLayerToTop() {
+        $('.kineticjs-content').css('z-index', '5');
+        $('.simple_sketch').css('z-index', '3');
+    }
+
+    function movesketchingAreaToTop() {
+        $('.simple_sketch').css('z-index', '5');
+        $('.kineticjs-content').css('z-index', '3');
+    }
+
     function _addHandlers() {
         $(DocumentManager).on("currentDocumentChange", currentDocumentChanged);
-        
+
         $('#toggle-sketching').click(function () {
             _toggleStatus();
         });
-        
+
         $('.addImageToStage').click(function () {
             addImageToStage(testImage);
         });
         //$(DocumentManager).on("workingSetAdd", addOverlay);
         $(DocumentManager).on("workingSetRemove", removeOverlay);
-        
+
+        $('.overlay').on("panelResizeEnd", function () {
+            moveImageLayerToTop();
+            moveToolsToTop();
+        });
+
     }
-    
+
     function initSketchingAreas() {
-        currentDocumentChanged();// Load up the currently open document, set all the variables such as editor which the Handlers need
-        _deactivate();
+        currentDocumentChanged(); // Load up the currently open document, set all the variables such as editor which the Handlers need
+        $(".overlay").hide();
+        $(".tools").hide();
+        $('#toggle-sketching').css('background-image', 'url("' + sketchIconDeactive + '")');
+        active = false;
     }
-    
-    function moveImageLayerToTop() {
-        $('.kineticjs-content').css('z-index','5'); 
-        $('.simple_sketch').css('z-index','3');
-    }
-    
-    function movesketchingAreaToTop() {
-        $('.simple_sketch').css('z-index','5');
-        $('.kineticjs-content').css('z-index','3');
-    }
-    
-	AppInit.appReady(function () {
+
+    var myPanel = $('<div id="foo" class="bottom-panels" >' +
+                     '<div class="toolbar simple-toolbar-layout">' +
+                     '<div class="title">Gallery</div></div>' +
+                     '<div class="table-container">Text</div>' +
+                     '</div>');
+
+    AppInit.appReady(function () {
         _addMenuItems();
         _addToolbarIcon();
         _addHandlers();
         initSketchingAreas();
-        
         var imageToAdd = {
             newImage: testImage
         };
+        
+        myPanel.insertBefore("#status-bar").hide();
+        Resizer.makeResizable(myPanel, "vert", "top", "200", false, false);
+
         $('.addImageToStage').click(function () {
             addImageToStage(testImage);
         });
@@ -289,6 +344,16 @@ define(function (require, exports, module) {
         });
         $('.sketchingAreaToTop').click(function () {
             movesketchingAreaToTop();
+        });
+        
+        $('.gallery').click(function () {
+            Resizer.toggle(myPanel);
+        });
+
+
+
+        $('.uploadDialog').click(function () {
+            //$('input[type=file].uploadButton').click();
         });
         //loadImages(sources, initStage);
     });
