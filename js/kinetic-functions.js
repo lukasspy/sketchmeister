@@ -4,6 +4,8 @@
 var sketchIconActive = require.toUrl('./sketch_button_on.png');
 var sketchIconDeactive = require.toUrl('./sketch_button_off.png');
 
+var allAnchors = new Array();
+
 function update(activeAnchor) {
     
     var group = activeAnchor.getParent();
@@ -45,6 +47,24 @@ function update(activeAnchor) {
         image.setSize(width, height);
     }
 }
+
+function showAnchors(stage) {
+    console.log('show: ' + allAnchors);
+    $.each(allAnchors, function(index, value) {
+        value.show();
+    });
+    stage.draw();
+}
+
+function hideAnchors(stage) {
+    console.log('hide: ' + allAnchors);
+    $.each(allAnchors, function(index, value) {
+        value.hide();
+        console.log(value);
+    });
+    stage.draw();
+}
+
 function addAnchor(group, x, y, name) {
     var stage = group.getStage();
     var layer = group.getLayer();
@@ -86,8 +106,9 @@ function addAnchor(group, x, y, name) {
         this.setStrokeWidth(2);
         layer.draw();
     });
-    
+
     group.add(anchor);
+    allAnchors.push(anchor);
 }
 function loadImages(sources, callback) {
     var images = {};
@@ -129,7 +150,7 @@ function createSketchingLayer(id) {
     stage.add(sketchingLayer);
 }
 
-function addImageToStage(imageToAdd) {
+function addImageToStage2(imageToAdd) {
     var helpImage = new Image();
     helpImage.src =  imageToAdd;
     //bild muss erst in den DOM geschrieben werden und dann kann die Größe ermittelt werden .. 

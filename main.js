@@ -1,24 +1,27 @@
 /*jslint vars: true, plusplus: true, devel: true, nomen: true, regexp: true, indent: 4, maxerr: 50, browser: true*/
-/*global define, $, brackets, window, CodeMirror, document, Kinetic, addImageToStage, addAnchor */
+/*global define, $, brackets, window, CodeMirror, document, Kinetic, addImageToStage, addAnchor, showAnchors, hideAnchors */
 
 define(function (require, exports, module) {
     "use strict";
 
-    require('jquery-ui-1.10.0.custom.min');
-    require('runmode');
-    require('sketch');
-    require('kinetic-v4.3.1.min');
-    require('kinetic-functions');
+    require('js/jquery-ui-1.10.0.custom.min');
+    require('js/runmode');
+    require('js/sketch');
+    require('js/kinetic-v4.3.1.min');
+    require('js/kinetic-functions');
+    var addImageDialog  = require("text!html/dialog.html");
 
     var CommandManager = brackets.getModule("command/CommandManager"),
         EditorManager = brackets.getModule("editor/EditorManager"),
         ExtensionUtils = brackets.getModule("utils/ExtensionUtils"),
         Editor = brackets.getModule("editor/Editor").Editor,
         DocumentManager = brackets.getModule("document/DocumentManager"),
+        NativeFileSystem = brackets.getModule("file/NativeFileSystem").NativeFileSystem,
         AppInit = brackets.getModule("utils/AppInit"),
         Resizer = brackets.getModule("utils/Resizer"),
         EditorUtils = brackets.getModule("editor/EditorUtils"),
         Menus = brackets.getModule("command/Menus"),
+        Dialogs = brackets.getModule("widgets/Dialogs"),
         COMMAND_ID = "me.lukasspy.brackets.sketchmeister";
 
     var stage;
@@ -26,11 +29,11 @@ define(function (require, exports, module) {
 
     var _sketchingAreaIdCounter = 0;
 
-    var loadCSSPromise = ExtensionUtils.loadStyleSheet(module, 'main.css');
+    var loadCSSPromise = ExtensionUtils.loadStyleSheet(module, 'css/main.css');
     var active = false;
-    var sketchIconActive = require.toUrl('./sketch_button_on.png');
-    var sketchIconDeactive = require.toUrl('./sketch_button_off.png');
-    var testImage = require.toUrl('./test.png');
+    var sketchIconActive = require.toUrl('./img/sketch_button_on.png');
+    var sketchIconDeactive = require.toUrl('./img/sketch_button_off.png');
+    var testImage = require.toUrl('./img/test.png');
 
     var _activeEditor = null;
     var _activeDocument = null;
@@ -50,6 +53,24 @@ define(function (require, exports, module) {
 
     /*----- functions for kinetic drag/resize ------*/
 
+    function moveToolsToTop() {
+        $('.tools').css('z-index', '5');
+    }
+
+    function moveImageLayerToTop() {
+        //Anchor einblenden
+        showAnchors(stage);
+        $('.kineticjs-content').css('z-index', '5');
+        $('.simple_sketch').css('z-index', '3');
+    }
+
+    function moveSketchingAreaToTop() {
+        //Anchor ausblenden
+        hideAnchors(stage);
+        $('.simple_sketch').css('z-index', '5');
+        $('.kineticjs-content').css('z-index', '3');
+    }
+    
     function createStage(sketchingArea) {
         stage = new Kinetic.Stage({
             container: 'overlay-' + sketchingArea.id,
@@ -63,50 +84,61 @@ define(function (require, exports, module) {
         console.log('stage done: ' + stage + ' layer done: ' + imageLayer);
         //stage.setAbsolutePosition(widthOfEditorFull, 0);
     }
-
+    
     function addImageToStage(imageToAdd) {
+        var widthOfImage;
+        var heightOfImage;
         var helpImage = new Image();
-        helpImage.src = imageToAdd;
-        //bild muss erst in den DOM geschrieben werden und dann kann die Größe ermittelt werden .. 
-        var widthOfImage = helpImage.naturalWidth;
-        var heightOfImage = helpImage.naturalHeight;
-
-        var widthResized = 200;
-        var heightResized = 150;
-
-        var imageGroup = new Kinetic.Group({
-            x: 0,
-            y: 0,
-            draggable: true
+        
+        $('<img src="' + imageToAdd + '" id="pups" class="visibility: hidden"/>').load(function () {
+            $(this).appendTo('#sidebar');
+            helpImage.src = $('#pups').attr('src');
+            widthOfImage = helpImage.width;
+            heightOfImage = helpImage.height;
+        
+            moveImageLayerToTop();
+            var widthResized = (_activeSketchingArea.width * 0.7);
+            var heightResized = (_activeSketchingArea.width * 0.7) / widthOfImage * heightOfImage;
+            if (widthResized > widthOfImage) {
+                widthResized = widthOfImage;
+                heightResized = heightOfImage;
+            }
+            
+            var imageGroup = new Kinetic.Group({
+                x: 40,
+                y: 40,
+                draggable: true
+            });
+    
+            // new Image added to group
+            var newImg = new Kinetic.Image({
+                x: 0,
+                y: 0,
+                image: helpImage,
+                width: widthResized,
+                height: heightResized,
+                name: 'image'
+            });
+    
+            imageGroup.add(newImg);
+            imageLayer.add(imageGroup);
+    
+            addAnchor(imageGroup, 0, 0, 'topLeft');
+            addAnchor(imageGroup, widthResized, 0, 'topRight');
+            addAnchor(imageGroup, widthResized, heightResized, 'bottomRight');
+            addAnchor(imageGroup, 0, heightResized, 'bottomLeft');
+    
+            imageGroup.on('dragstart', function () {
+                this.moveToTop();
+            });
+            stage.draw();
+            $('#pups').remove();
         });
-
-        // new Image added to group
-        var newImg = new Kinetic.Image({
-            x: 40,
-            y: 40,
-            image: helpImage,
-            width: widthResized,
-            height: 150,
-            name: 'image'
-        });
-
-        imageGroup.add(newImg);
-        imageLayer.add(imageGroup);
-
-        addAnchor(imageGroup, 0, 0, 'topLeft');
-        addAnchor(imageGroup, widthResized, 0, 'topRight');
-        addAnchor(imageGroup, widthResized, heightResized, 'bottomRight');
-        addAnchor(imageGroup, 0, heightResized, 'bottomLeft');
-
-        imageGroup.on('dragstart', function () {
-            this.moveToTop();
-        });
-        stage.draw();
+        
     }
 
     /*----- functions for sketching area ------*/
     function _deactivate() {
-
         $(".overlay").hide("slide", {
             direction: "right",
             easing: 'easeOutCirc'
@@ -250,8 +282,6 @@ define(function (require, exports, module) {
         deleteSketchingArea(sketchingAreaToDelete);
     }
 
-
-
     function _toggleStatus() {
         if (active) {
             _deactivate();
@@ -269,23 +299,7 @@ define(function (require, exports, module) {
         menu.addMenuItem(MY_COMMAND_ID);
     }
 
-    function moveToolsToTop() {
-        $('.tools').css('z-index', '5');
-    }
     
-    function toggleGallery() {
-        $('#foo').toggle();
-    }
-
-    function moveImageLayerToTop() {
-        $('.kineticjs-content').css('z-index', '5');
-        $('.simple_sketch').css('z-index', '3');
-    }
-
-    function movesketchingAreaToTop() {
-        $('.simple_sketch').css('z-index', '5');
-        $('.kineticjs-content').css('z-index', '3');
-    }
 
     function _addHandlers() {
         $(DocumentManager).on("currentDocumentChange", currentDocumentChanged);
@@ -313,14 +327,22 @@ define(function (require, exports, module) {
         $(".tools").hide();
         $('#toggle-sketching').css('background-image', 'url("' + sketchIconDeactive + '")');
         active = false;
+        //$('body').append($(Mustache.render(addImageDialog)));
     }
 
     var myPanel = $('<div id="foo" class="bottom-panels" >' +
                      '<div class="toolbar simple-toolbar-layout">' +
                      '<div class="title">Gallery</div></div>' +
-                     '<div class="table-container">Text</div>' +
+                     '<div class="table-container"><div class="gallery"></div></div>' +
                      '</div>');
-
+    
+    function insertFileToImageArea(files) {
+        var i;
+        for (i = 0; i < files.length; i++) {
+            addImageToStage(files[i]);
+        }
+    }
+    
     AppInit.appReady(function () {
         _addMenuItems();
         _addToolbarIcon();
@@ -334,7 +356,8 @@ define(function (require, exports, module) {
         Resizer.makeResizable(myPanel, "vert", "top", "200", false, false);
 
         $('.addImageToStage').click(function () {
-            addImageToStage(testImage);
+            NativeFileSystem.showOpenDialog(true, false, "Choose a file...", null, ['png', 'jpg', 'gif', 'jpeg'], function (files) {insertFileToImageArea(files); }, function (err) {});
+            //addImageToStage(testImage);
         });
         $('.saveSketch').click(function () {
             //sketchGetURL();
@@ -343,12 +366,35 @@ define(function (require, exports, module) {
             moveImageLayerToTop();
         });
         $('.sketchingAreaToTop').click(function () {
-            movesketchingAreaToTop();
+            moveSketchingAreaToTop();
         });
         
         $('.gallery').click(function () {
-            Resizer.toggle(myPanel);
+            //Dialogs.showModalDialog("add-image-dialog");
+            //NativeFileSystem.requestNativeFileSystem(true, function (success) {}, function (err) {});
+            NativeFileSystem.showOpenDialog(true, false, "Choose a file...", null, ['png', 'jpg', 'gif', 'jpeg'], function (files) {insertFileToImageArea(files); }, function (err) {});
+            /*
+            var len = files.length;
+            var file;
+            for (var i = 0; i<len ; i++) {
+                file = files[i];
+                $('.dropbox-file-rows').append(
+                    '<tr data-path=' + file.path + (file.isFolder ? ' class="folder-row"' : '') + '><td class="file-icon">' +
+                    '<img src="' + moduleDir + '/img/' +  (file.isFile ? "file" : "folder" ) + '.png"/> ' +
+                    "</td><td>" +
+                    file.name +
+                    "</td><td>" +
+                    file.humanSize +
+                    "</td><td>" +
+                    file.modifiedAt +
+                    '</td></tr>');
+            }*/
+            //Resizer.toggle(myPanel);
+            //$('.gallery').load('//www.spy-web.de/gallery.php');
+            //$('.gallery-container').load('http://www.spy-web.de/sketch/gallery.php');
         });
+        
+        
 
 
 
