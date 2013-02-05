@@ -7,25 +7,25 @@ define(function (require, exports, module) {
     require('js/jquery-ui-1.10.0.custom.min');
     require('js/runmode');
     require('js/sketch');
-    require('js/kinetic-v4.3.1.min');
+    require('js/kinetic-v4.3.1');
     require('js/kinetic-functions');
-    var addImageDialog  = require("text!html/dialog.html");
+
+    var addImageDialog = require("text!html/dialog.html");
 
     var CommandManager = brackets.getModule("command/CommandManager"),
+        ProjectManager = brackets.getModule("project/ProjectManager"),
         EditorManager = brackets.getModule("editor/EditorManager"),
         ExtensionUtils = brackets.getModule("utils/ExtensionUtils"),
         Editor = brackets.getModule("editor/Editor").Editor,
         DocumentManager = brackets.getModule("document/DocumentManager"),
         NativeFileSystem = brackets.getModule("file/NativeFileSystem").NativeFileSystem,
+        FileUtils = brackets.getModule("file/FileUtils"),
         AppInit = brackets.getModule("utils/AppInit"),
         Resizer = brackets.getModule("utils/Resizer"),
         EditorUtils = brackets.getModule("editor/EditorUtils"),
         Menus = brackets.getModule("command/Menus"),
-        Dialogs = brackets.getModule("widgets/Dialogs"),
-        COMMAND_ID = "me.lukasspy.brackets.sketchmeister";
-
-    var stage;
-    var imageLayer;
+        KeyBindingManager = brackets.getModule("command/KeyBindingManager"),
+        Dialogs = brackets.getModule("widgets/Dialogs");
 
     var _sketchingAreaIdCounter = 0;
 
@@ -39,6 +39,9 @@ define(function (require, exports, module) {
     var _activeDocument = null;
     var _documentSketchingAreas = [];
     var _activeSketchingArea = null;
+    var _activeStage;
+    var _activeLayer = "sketch";
+    var imageLayer;
     var _codeMirror = null;
 
 
@@ -59,43 +62,46 @@ define(function (require, exports, module) {
 
     function moveImageLayerToTop() {
         //Anchor einblenden
-        showAnchors(stage);
+        showAnchors(_activeStage);
         $('.kineticjs-content').css('z-index', '5');
         $('.simple_sketch').css('z-index', '3');
+        _activeLayer = "image";
     }
 
     function moveSketchingAreaToTop() {
         //Anchor ausblenden
-        hideAnchors(stage);
+        hideAnchors(_activeStage);
         $('.simple_sketch').css('z-index', '5');
         $('.kineticjs-content').css('z-index', '3');
+        _activeLayer = "sketch";
     }
-    
-    function createStage(sketchingArea) {
-        stage = new Kinetic.Stage({
-            container: 'overlay-' + sketchingArea.id,
-            width: sketchingArea.width,
-            height: sketchingArea.height
+
+    function createStage(id, width, height) {
+        var stage = new Kinetic.Stage({
+            container: 'overlay-' + id,
+            width: width,
+            height: height
         });
         imageLayer = new Kinetic.Layer({
             id: 'images'
         });
         stage.add(imageLayer);
-        console.log('stage done: ' + stage + ' layer done: ' + imageLayer);
+        return stage;
+        //console.log('stage done: ' + stage + ' layer done: ' + imageLayer);
         //stage.setAbsolutePosition(widthOfEditorFull, 0);
     }
-    
+
     function addImageToStage(imageToAdd) {
         var widthOfImage;
         var heightOfImage;
         var helpImage = new Image();
-        
+
         $('<img src="' + imageToAdd + '" id="pups" class="visibility: hidden"/>').load(function () {
             $(this).appendTo('#sidebar');
             helpImage.src = $('#pups').attr('src');
             widthOfImage = helpImage.width;
             heightOfImage = helpImage.height;
-        
+
             moveImageLayerToTop();
             var widthResized = (_activeSketchingArea.width * 0.7);
             var heightResized = (_activeSketchingArea.width * 0.7) / widthOfImage * heightOfImage;
@@ -103,13 +109,13 @@ define(function (require, exports, module) {
                 widthResized = widthOfImage;
                 heightResized = heightOfImage;
             }
-            
+            var visualPos = _activeEditor.getScrollPos();
             var imageGroup = new Kinetic.Group({
-                x: 40,
-                y: 40,
+                x: visualPos.x + 40,
+                y: visualPos.y + 40,
                 draggable: true
             });
-    
+
             // new Image added to group
             var newImg = new Kinetic.Image({
                 x: 0,
@@ -119,27 +125,29 @@ define(function (require, exports, module) {
                 height: heightResized,
                 name: 'image'
             });
-    
+
             imageGroup.add(newImg);
             imageLayer.add(imageGroup);
-    
+
             addAnchor(imageGroup, 0, 0, 'topLeft');
             addAnchor(imageGroup, widthResized, 0, 'topRight');
             addAnchor(imageGroup, widthResized, heightResized, 'bottomRight');
             addAnchor(imageGroup, 0, heightResized, 'bottomLeft');
-    
+
             imageGroup.on('dragstart', function () {
                 this.moveToTop();
             });
-            stage.draw();
+            _activeStage.draw();
             $('#pups').remove();
         });
-        
+
     }
 
     /*----- functions for sketching area ------*/
     function _deactivate() {
-        $(".overlay").hide("slide", {
+        $(".overlay").hide();
+        $(".tools").hide();
+        /*      $(".overlay").hide("slide", {
             direction: "right",
             easing: 'easeOutCirc'
         }, 400);
@@ -147,8 +155,10 @@ define(function (require, exports, module) {
             direction: "right",
             easing: 'easeOutCirc'
         }, 400);
+*/
         $('#toggle-sketching').css('background-image', 'url("' + sketchIconDeactive + '")');
         active = false;
+
     }
 
     function _activate() {
@@ -156,7 +166,9 @@ define(function (require, exports, module) {
             event.preventDefault();
             return false;
         });
-        $(".overlay").show("slide", {
+        $(".overlay").show();
+        $(".tools").show();
+        /*      $(".overlay").show("slide", {
             direction: "right",
             easing: 'easeOutCirc'
         }, 400);
@@ -164,25 +176,62 @@ define(function (require, exports, module) {
             direction: "right",
             easing: 'easeOutCirc'
         }, 400);
+*/
         $('#toggle-sketching').css('background-image', 'url("' + sketchIconActive + '")');
         active = true;
     }
 
     function _addSketchingTools(id) {
-        $(_activeEditor.getScrollerElement()).append('<div class="tools" id="tools-' + id + '"><a href="#simple_sketch-' + id + '" data-tool="eraser">Era</a></div>');
-        $.each(['#f00', '#ff0', '#0f0', '#0ff', '#00f', '#f0f', '#000', '#fff'], function () {
-            $('#tools-' + id).append("<a href='#simple_sketch-" + id + "' data-tool='marker' data-color='" + this + "' style='width: 30px; background: " + this + ";'></a> ");
+        $(_activeEditor.getScrollerElement()).append('<div class="tools" id="tools-' + id + '" style="height: ' + $(_activeEditor.getScrollerElement()).height() + 'px"></div>');
+        $('#tools-' + id).append('<div class="seperator"></div>');
+        $('#tools-' + id).append("<a href='#' class='saveSketch button'>save</a> ");
+        $('#tools-' + id).append("<a href='#' class='loadSketch button'>load</a> ");
+        //$('#tools-' + id).append("<a href='#' style='background: transparent' class='addImageToStage button'>add</a> ");
+        //$('#tools-' + id).append("<a href='#' style='background: transparent' class='uploadDialog button'>Upl</a> ");
+        //$('#tools-' + id).append("<input type='file' style='visibility:hidden;display:none' class='uploadButton'/>");
+        $('#tools-' + id).append("<a href='#' class='add-image button'>+</a> ");
+
+        $('#tools-' + id).append('<div class="seperator">Layer</div>');
+        if (_activeLayer === "sketch") {
+            $('#tools-' + id).append("<a href='#' class='image-layer layer'>image</a> ");
+            $('#tools-' + id).append("<a href='#' class='sketching-layer layer selected'>sketch</a> ");
+        } else {
+            $('#tools-' + id).append("<a href='#' class='image-layer layer selected'>image</a> ");
+            $('#tools-' + id).append("<a href='#' class='sketching-layer layer'>sketch</a> ");
+        }
+        $('#tools-' + id).append('<div class="seperator">Color</div>');
+        var colors = {
+            'black': '#000000',
+            'grey': '#B2ADA1',
+            'white': '#FFFFFF',
+            'red': '#E22E00',
+            'yellow': '#F5A800',
+            'blue': '#447E82',
+            'green': '#8DA56D'
+        };
+        $.each(colors, function (key, value) {
+            if (key === "black") {
+                $('#tools-' + id).append("<a class='color " + key + " selected' href='#simple_sketch-" + id + "' data-tool='marker' data-color='" + value + "' style='background: " + value + ";'></a> ");
+            } else {
+                $('#tools-' + id).append("<a class='color " + key + "' href='#simple_sketch-" + id + "' data-tool='marker' data-color='" + value + "' style='background: " + value + ";'></a> ");
+            }
         });
-        $.each([3, 5, 10, 15], function () {
-            $('#tools-' + id).append("<a href='#simple_sketch-" + id + "' data-tool='marker' data-size='" + this + "' style='background: transparent'>" + this + "</a> ");
+        $('#tools-' + id).append('<div class="seperator">Tool</div>');
+        $('#tools-' + id).append('<a class="eraser" href="#simple_sketch-' + id + '" data-tool="eraser"></a>');
+        $('#tools-' + id).append('<div class="seperator">Size</div>');
+        var sizes = {
+            'small': 5,
+            'medium': 10,
+            'large': 15
+        };
+        $.each(sizes, function (key, value) {
+            if (key === "small") {
+                $('#tools-' + id).append("<a class='size " + key + " selected' href='#simple_sketch-" + id + "' data-size='" + (value - 3) + "'>" + value + "</a> ");
+
+            } else {
+                $('#tools-' + id).append("<a class='size " + key + "' href='#simple_sketch-" + id + "' data-size='" + (value - 3) + "'>" + value + "</a> ");
+            }
         });
-        $('#tools-' + id).append("<a href='#' style='background: transparent' class='saveSketch'>save</a> ");
-        $('#tools-' + id).append("<a href='#' style='background: transparent' class='addImageToStage'>add</a> ");
-        $('#tools-' + id).append("<a href='#' style='background: transparent' class='imageLayerToTop'>Img</a> ");
-        $('#tools-' + id).append("<a href='#' style='background: transparent' class='sketchingAreaToTop'>Draw</a> ");
-        $('#tools-' + id).append("<a href='#' style='background: transparent' class='uploadDialog'>Upl</a> ");
-        $('#tools-' + id).append("<input type='file' style='visibility:hidden;display:none' class='uploadButton'/>");
-        $('#tools-' + id).append("<a href='#' style='background: transparent' class='gallery'>Gal</a> ");
     }
 
     function _addToolbarIcon(id) {
@@ -193,15 +242,8 @@ define(function (require, exports, module) {
     function _addSketchingArea(path) {
         var id = _sketchingAreaIdCounter++;
         var height = $(_activeEditor.getScrollerElement()).height();
-        var width = $(_activeEditor.getScrollerElement()).width() / 2;
+        var width = $(_activeEditor.getScrollerElement()).width();
         var totalHeight = _activeEditor.totalHeight(true);
-        var sketchingArea = {
-            'fullPath': path,
-            'id': id,
-            'active': true,
-            'width': width,
-            'height': totalHeight
-        };
 
         $(_activeEditor.getScrollerElement()).append('<div class="overlay" id="overlay-' + id + '"><canvas class="simple_sketch" id="simple_sketch-' + id + '" width="' + width + '" height="' + totalHeight + '"></canvas></div>');
 
@@ -212,11 +254,20 @@ define(function (require, exports, module) {
         $('#simple_sketch-' + id).sketch();
 
         _addSketchingTools(id);
-        createStage(sketchingArea);
+        var stage = createStage(id, width, totalHeight);
+
+        var sketchingArea = {
+            'fullPath': path,
+            'id': id,
+            'active': true,
+            'width': width,
+            'height': totalHeight,
+            'stage': stage
+        };
 
         if (!active) {
             _deactivate();
-            console.log('wurde deaktiviert');
+            //console.log('wurde deaktiviert');
         }
         var length = _documentSketchingAreas.push(sketchingArea);
         return length - 1;
@@ -256,8 +307,15 @@ define(function (require, exports, module) {
         } else {
             var key = _addSketchingArea(_activeFullPath);
             _activeSketchingArea = _documentSketchingAreas[key];
+            if (_activeLayer === "sketch") {
+                moveSketchingAreaToTop();
+            } else {
+                moveImageLayerToTop();
+            }
+
         }
-        console.log(_documentSketchingAreas);
+        _activeStage = _activeSketchingArea.stage;
+
     }
 
     function deleteSketchingArea(id) {
@@ -291,18 +349,51 @@ define(function (require, exports, module) {
     }
 
     function _addMenuItems() {
-        var MY_COMMAND_ID = "sketchmeister.toggleActivation"; // package-style naming to avoid collisions
-        CommandManager.register("Enable Sketchmeister", MY_COMMAND_ID, _toggleStatus);
+        var viewMenu = Menus.getMenu(Menus.AppMenuBar.VIEW_MENU);
+        viewMenu.addMenuDivider();
 
-        var menu = Menus.getMenu(Menus.AppMenuBar.VIEW_MENU);
-        menu.addMenuDivider();
-        menu.addMenuItem(MY_COMMAND_ID);
+        function registerCommandHandler(commandId, menuName, handler, shortcut) {
+            CommandManager.register(menuName, commandId, handler);
+            viewMenu.addMenuItem(commandId);
+            KeyBindingManager.addBinding(commandId, shortcut);
+        }
+
+        registerCommandHandler("lukasspy.sketchmeister.toggleActivation", "Enable Sketchmeister", _toggleStatus, "Ctrl-1");
     }
 
+    function saveSketchesAndImages() {
+        var canvas = $('#simple_sketch-' + _activeSketchingArea.id)[0];
+        var img = canvas.toDataURL("image/png");
+        var fileEntry = new NativeFileSystem.FileEntry(FileUtils.getNativeModuleDirectoryPath(module) + "/bildchen.txt");
+        FileUtils.writeText(fileEntry, img).done(function () {
+            console.log("Text successfully updated");
+        }).fail(function (err) {
+            console.log("Error writing text: " + err.name);
+        });
+
+    }
     
+    function loadSketchesAndImages() {
+        var canvas = $('#simple_sketch-' + _activeSketchingArea.id)[0];
+        var ctx = canvas.getContext("2d");
+        var fileEntry = new NativeFileSystem.FileEntry(FileUtils.getNativeModuleDirectoryPath(module) + "/bildchen.txt");
+        FileUtils.readAsText(fileEntry).done(function (data, readTimestamp) {
+            var image = new Image();
+            image.src = data;
+            image.onload = function () {
+                ctx.drawImage(image, 0, 0);
+            };
+        }).fail(function (err) {
+            console.log("Error reading text: " + err.name);
+        });
+        
+        
+    }
 
     function _addHandlers() {
         $(DocumentManager).on("currentDocumentChange", currentDocumentChanged);
+
+        $(DocumentManager).on("documentSaved", saveSketchesAndImages);
 
         $('#toggle-sketching').click(function () {
             _toggleStatus();
@@ -330,19 +421,22 @@ define(function (require, exports, module) {
         //$('body').append($(Mustache.render(addImageDialog)));
     }
 
-    var myPanel = $('<div id="foo" class="bottom-panels" >' +
-                     '<div class="toolbar simple-toolbar-layout">' +
-                     '<div class="title">Gallery</div></div>' +
-                     '<div class="table-container"><div class="gallery"></div></div>' +
-                     '</div>');
-    
+    var myPanel = $('<div id="foo" class="sidebar">' +
+    //                     '<div >' +
+    //                     '<div class="title">Gallery</div></div>' +
+    //                     '<div class="table-container"><div class="gallery"></div></div>' +
+                    '</div>');
+
     function insertFileToImageArea(files) {
+        $('.tools .layer').removeClass('selected');
+        $('.tools .image-layer').addClass('selected');
         var i;
         for (i = 0; i < files.length; i++) {
             addImageToStage(files[i]);
         }
+
     }
-    
+
     AppInit.appReady(function () {
         _addMenuItems();
         _addToolbarIcon();
@@ -351,29 +445,87 @@ define(function (require, exports, module) {
         var imageToAdd = {
             newImage: testImage
         };
-        
-        myPanel.insertBefore("#status-bar").hide();
-        Resizer.makeResizable(myPanel, "vert", "top", "200", false, false);
 
-        $('.addImageToStage').click(function () {
-            NativeFileSystem.showOpenDialog(true, false, "Choose a file...", null, ['png', 'jpg', 'gif', 'jpeg'], function (files) {insertFileToImageArea(files); }, function (err) {});
+        $('body').delegate('.saveSketch', 'click', function () {
+            saveSketchesAndImages();
+        });
+        
+        $('body').delegate('.loadSketch', 'click', function () {
+            loadSketchesAndImages();
+        });
+        
+        $('body').delegate('.kineticjs-content', 'mousemove mousedown mouseup mouseleave hover', function (e) {
+            e.preventDefault();
+            _activeEditor.setSelection(_activeEditor.getCursorPos(), _activeEditor.getCursorPos());
+            return false;
+        });
+
+
+        //myPanel.insertAfter("#sidebar");
+        //Resizer.makeResizable(myPanel, "horz", "right", 50, false, false);
+        //Resizer.hide(myPanel);
+
+        $('body').delegate('.tools .button', 'click', function () {
+            var id = _activeSketchingArea.id;
+            $('#tools-' + id + ' .button').removeClass('selected');
+            $(this).addClass('selected');
+        });
+        $('body').delegate('.tools .eraser', 'click', function () {
+            var id = _activeSketchingArea.id;
+            $('#tools-' + id + ' .color').removeClass('selected');
+            $(this).addClass('selected');
+        });
+
+        $('body').delegate('.tools .color', 'click', function () {
+            var id = _activeSketchingArea.id;
+            $('#tools-' + id + ' .eraser').removeClass('selected');
+            $('#tools-' + id + ' .color').removeClass('selected');
+            $(this).addClass('selected');
+        });
+
+        $('body').delegate('.tools .layer', 'click', function () {
+            $('.tools .layer').removeClass('selected');
+            $(this).removeClass('layer');
+            var layer = $(this).attr('class');
+            $(this).addClass('layer');
+            $('.tools .' + layer).addClass('selected');
+        });
+
+        $('body').delegate('.tools .size', 'click', function () {
+            var id = _activeSketchingArea.id;
+            $('#tools-' + id + ' .size').removeClass('selected');
+            $(this).addClass('selected');
+        });
+
+        $('body').delegate('.kineticjs-content canvas', 'mouseselect', function (e) {
+            console.log('clicked on stage');
+            e.preventDefault();
+            return false;
+        });
+
+        $('body').delegate('.add-image', 'click', function () {
+            var id = _activeSketchingArea.id;
+            NativeFileSystem.showOpenDialog(true, false, "Choose a file...", null, ['png', 'jpg', 'gif', 'jpeg'], function (files) {
+                insertFileToImageArea(files, id);
+            }, function (err) {});
             //addImageToStage(testImage);
         });
         $('.saveSketch').click(function () {
             //sketchGetURL();
         });
-        $('.imageLayerToTop').click(function () {
+        $('body').delegate('.image-layer', 'click', function () {
             moveImageLayerToTop();
         });
-        $('.sketchingAreaToTop').click(function () {
+        $('body').delegate('.sketching-layer', 'click', function () {
             moveSketchingAreaToTop();
         });
-        
-        $('.gallery').click(function () {
+
+        /*$('.gallery').click(function () {
             //Dialogs.showModalDialog("add-image-dialog");
             //NativeFileSystem.requestNativeFileSystem(true, function (success) {}, function (err) {});
             NativeFileSystem.showOpenDialog(true, false, "Choose a file...", null, ['png', 'jpg', 'gif', 'jpeg'], function (files) {insertFileToImageArea(files); }, function (err) {});
-            /*
+            
+            
             var len = files.length;
             var file;
             for (var i = 0; i<len ; i++) {
@@ -388,17 +540,14 @@ define(function (require, exports, module) {
                     "</td><td>" +
                     file.modifiedAt +
                     '</td></tr>');
-            }*/
+            }
             //Resizer.toggle(myPanel);
             //$('.gallery').load('//www.spy-web.de/gallery.php');
             //$('.gallery-container').load('http://www.spy-web.de/sketch/gallery.php');
-        });
-        
-        
-
-
+        });*/
 
         $('.uploadDialog').click(function () {
+            Resizer.toggle(myPanel);
             //$('input[type=file].uploadButton').click();
         });
         //loadImages(sources, initStage);

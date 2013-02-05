@@ -50,19 +50,23 @@ function update(activeAnchor) {
 
 function showAnchors(stage) {
     console.log('show: ' + allAnchors);
-    $.each(allAnchors, function(index, value) {
-        value.show();
-    });
-    stage.draw();
+    if(allAnchors.length) {
+        $.each(allAnchors, function(index, value) {
+            value.show();
+        });
+        stage.draw();
+    }
 }
 
 function hideAnchors(stage) {
     console.log('hide: ' + allAnchors);
-    $.each(allAnchors, function(index, value) {
-        value.hide();
-        console.log(value);
-    });
-    stage.draw();
+    if(allAnchors.length) {
+        $.each(allAnchors, function(index, value) {
+            value.hide();
+            console.log(value);
+        });
+        stage.draw();
+    }
 }
 
 function addAnchor(group, x, y, name) {
