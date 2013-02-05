@@ -49,7 +49,6 @@ function update(activeAnchor) {
 }
 
 function showAnchors(stage) {
-    console.log('show: ' + allAnchors);
     if(allAnchors.length) {
         $.each(allAnchors, function(index, value) {
             value.show();
@@ -59,11 +58,9 @@ function showAnchors(stage) {
 }
 
 function hideAnchors(stage) {
-    console.log('hide: ' + allAnchors);
     if(allAnchors.length) {
         $.each(allAnchors, function(index, value) {
             value.hide();
-            console.log(value);
         });
         stage.draw();
     }

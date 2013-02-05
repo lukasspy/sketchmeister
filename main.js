@@ -162,10 +162,6 @@ define(function (require, exports, module) {
     }
 
     function _activate() {
-        $(".overlay").click(function (event) {
-            event.preventDefault();
-            return false;
-        });
         $(".overlay").show();
         $(".tools").show();
         /*      $(".overlay").show("slide", {
@@ -190,6 +186,7 @@ define(function (require, exports, module) {
         //$('#tools-' + id).append("<a href='#' style='background: transparent' class='uploadDialog button'>Upl</a> ");
         //$('#tools-' + id).append("<input type='file' style='visibility:hidden;display:none' class='uploadButton'/>");
         $('#tools-' + id).append("<a href='#' class='add-image button'>+</a> ");
+        $('#tools-' + id).append("<a href='#' class='undo button' href='#simple_sketch-" + id + "' data-tool='undo'>undo</a> ");
 
         $('#tools-' + id).append('<div class="seperator">Layer</div>');
         if (_activeLayer === "sketch") {
@@ -216,7 +213,6 @@ define(function (require, exports, module) {
                 $('#tools-' + id).append("<a class='color " + key + "' href='#simple_sketch-" + id + "' data-tool='marker' data-color='" + value + "' style='background: " + value + ";'></a> ");
             }
         });
-        $('#tools-' + id).append('<div class="seperator">Tool</div>');
         $('#tools-' + id).append('<a class="eraser" href="#simple_sketch-' + id + '" data-tool="eraser"></a>');
         $('#tools-' + id).append('<div class="seperator">Size</div>');
         var sizes = {
@@ -294,6 +290,7 @@ define(function (require, exports, module) {
         _activeEditor = EditorManager.getCurrentFullEditor();
         $(_activeEditor).on("scroll", _scroll);
         _activeDocument = DocumentManager.getCurrentDocument();
+        console.log(_activeDocument);
         var _activeFullPath = _activeDocument.file.fullPath;
         var foundSketchingArea = -1;
         $.each(_documentSketchingAreas, function (key, sketchingArea) {
@@ -495,12 +492,6 @@ define(function (require, exports, module) {
             var id = _activeSketchingArea.id;
             $('#tools-' + id + ' .size').removeClass('selected');
             $(this).addClass('selected');
-        });
-
-        $('body').delegate('.kineticjs-content canvas', 'mouseselect', function (e) {
-            console.log('clicked on stage');
-            e.preventDefault();
-            return false;
         });
 
         $('body').delegate('.add-image', 'click', function () {

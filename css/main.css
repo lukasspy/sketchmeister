@@ -31,12 +31,17 @@
     line-height: 20px;
 }
 .tools a.eraser {
-    width: 60px;
-    height: 40px;
-    background: transparent url('../img/eraser.png') top center no-repeat;
+    height: 30px;
+    margin: 5px 15px;
+    width: 30px;
+    border-radius: 20px;
+    border: 2px solid #36393A;
+    box-shadow: inset 1px 1px 4px rgba(0, 0, 0, 0.3);
+    background: transparent url('../img/eraser-transparent.png') center right no-repeat;
 }
 .tools a.eraser.selected {
-    background: transparent url('../img/eraser-selected.png') top center no-repeat;
+    border: 2px solid #eee;
+    box-shadow: inset 1px 1px 2px rgba(0, 0, 0, 0.6);
 }
 .tools a.button, .tools a.layer, .tools a.size {
     height: 20px;
