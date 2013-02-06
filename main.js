@@ -290,7 +290,7 @@ define(function (require, exports, module) {
         _activeEditor = EditorManager.getCurrentFullEditor();
         $(_activeEditor).on("scroll", _scroll);
         _activeDocument = DocumentManager.getCurrentDocument();
-        console.log(_activeDocument);
+        //console.log(_activeDocument);
         var _activeFullPath = _activeDocument.file.fullPath;
         var foundSketchingArea = -1;
         $.each(_documentSketchingAreas, function (key, sketchingArea) {
