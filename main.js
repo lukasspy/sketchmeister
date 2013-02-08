@@ -3,12 +3,18 @@
 
 define(function (require, exports, module) {
     "use strict";
-
+    
+    var xmlFilename = "sketchmeister.xml";
+    var $xmlData;
+    
     require('js/jquery-ui-1.10.0.custom.min');
     require('js/runmode');
     require('js/sketch');
+    require('js/json2');
     require('js/kinetic-v4.3.1');
     require('js/kinetic-functions');
+
+
 
     var addImageDialog = require("text!html/dialog.html");
 
@@ -44,7 +50,24 @@ define(function (require, exports, module) {
     var imageLayer;
     var _codeMirror = null;
 
+    var allPaintingActions = [];
 
+    /*----- xml functions -----*/
+
+    $.createElement = function (name) {
+        return $('<' + name + ' />');
+    };
+
+    function createXMLNodeForProject(fullPathOfProject) {
+        $xmlData = $('<project />');
+        $xmlData.append($.createElement("fullPath").text(fullPathOfProject));
+    }
+
+    function createXMLNodeForFile(filename, relativePath) {
+        var newFile = $.createElement("file");
+        newFile.append($.createElement("filename").text(filename).attr('relativePath', relativePath));
+        return newFile;
+    }
 
     /*----- sketch.js functionen -----*/
 
@@ -180,22 +203,20 @@ define(function (require, exports, module) {
     function _addSketchingTools(id) {
         $(_activeEditor.getScrollerElement()).append('<div class="tools" id="tools-' + id + '" style="height: ' + $(_activeEditor.getScrollerElement()).height() + 'px"></div>');
         $('#tools-' + id).append('<div class="seperator"></div>');
-        $('#tools-' + id).append("<a href='#' class='saveSketch button'>save</a> ");
+        $('#tools-' + id).append("<a href='#' class='saveSketch button'>show</a> ");
         $('#tools-' + id).append("<a href='#' class='loadSketch button'>load</a> ");
         //$('#tools-' + id).append("<a href='#' style='background: transparent' class='addImageToStage button'>add</a> ");
         //$('#tools-' + id).append("<a href='#' style='background: transparent' class='uploadDialog button'>Upl</a> ");
         //$('#tools-' + id).append("<input type='file' style='visibility:hidden;display:none' class='uploadButton'/>");
-        $('#tools-' + id).append("<a href='#' class='add-image button'>+</a> ");
-        $('#tools-' + id).append("<a href='#' class='undo button' href='#simple_sketch-" + id + "' data-tool='undo'>undo</a> ");
 
-        $('#tools-' + id).append('<div class="seperator">Layer</div>');
-        if (_activeLayer === "sketch") {
-            $('#tools-' + id).append("<a href='#' class='image-layer layer'>image</a> ");
-            $('#tools-' + id).append("<a href='#' class='sketching-layer layer selected'>sketch</a> ");
-        } else {
-            $('#tools-' + id).append("<a href='#' class='image-layer layer selected'>image</a> ");
-            $('#tools-' + id).append("<a href='#' class='sketching-layer layer'>sketch</a> ");
-        }
+        $('#tools-' + id).append('<a href="#simple_sketch-' + id + '" data-undo="png" class="undo"></a>');
+        $('#tools-' + id).append("<a href='#simple_sketch-" + id + "' data-save='save' class='button'>save</a> ");
+
+        $('#tools-' + id).append('<div class="seperator">Image</div>');
+        $('#tools-' + id).append("<a href='#' class='add-image button'>+</a> ");
+        $('#tools-' + id).append("<a href='#' class='image-layer edit'>edit</a> ");
+
+
         $('#tools-' + id).append('<div class="seperator">Color</div>');
         var colors = {
             'black': '#000000',
@@ -247,7 +268,7 @@ define(function (require, exports, module) {
 
         $("#overlay-" + id).css('height', height + 'px');
         $("#overlay-" + id).css('width', width + 'px');
-        $('#simple_sketch-' + id).sketch();
+        var sketchArea = $('#simple_sketch-' + id).sketch();
 
         _addSketchingTools(id);
         var stage = createStage(id, width, totalHeight);
@@ -258,7 +279,8 @@ define(function (require, exports, module) {
             'active': true,
             'width': width,
             'height': totalHeight,
-            'stage': stage
+            'stage': stage,
+            'sketchArea': sketchArea.obj
         };
 
         if (!active) {
@@ -287,10 +309,13 @@ define(function (require, exports, module) {
     }
 
     function currentDocumentChanged() {
+        
+        // set the current Full Editor as _activeEditor
         _activeEditor = EditorManager.getCurrentFullEditor();
+        // if _activeEditor gets scrolled then also scroll the sketching overlay
         $(_activeEditor).on("scroll", _scroll);
+        // set the current Document as _activeDocument to get additional data of the file
         _activeDocument = DocumentManager.getCurrentDocument();
-        //console.log(_activeDocument);
         var _activeFullPath = _activeDocument.file.fullPath;
         var foundSketchingArea = -1;
         $.each(_documentSketchingAreas, function (key, sketchingArea) {
@@ -358,7 +383,51 @@ define(function (require, exports, module) {
         registerCommandHandler("lukasspy.sketchmeister.toggleActivation", "Enable Sketchmeister", _toggleStatus, "Ctrl-1");
     }
 
+    function checkIfXMLFileExists(path) {
+        NativeFileSystem.resolveNativeFileSystemPath(path, function (entry) {
+            return true;
+        }, function (err) {
+            return false;
+        });
+    }
+    
+    function checkIfFileNodeExists() {
+    }
+
     function saveSketchesAndImages() {
+        
+        var sketchingActionsAsJSON = JSON.stringify(_activeSketchingArea.sketchArea.actions);
+        
+        var filename = _activeDocument.file.name;
+        var fullProjectPathAndFilename = _activeSketchingArea.fullPath;
+        var fullProjectPath = ProjectManager.getProjectRoot().fullPath;
+        var relativeProjectPath = fullProjectPathAndFilename.replace(fullProjectPath, "").replace(filename, "");
+
+        console.log("fullProjectPath: " + fullProjectPath);
+        console.log("relativeProjectPath: " + relativeProjectPath);
+        console.log("filename: " + filename);
+        var fileNodeExists;
+        var xmlFileExists = checkIfXMLFileExists(fullProjectPathAndFilename);
+        if (xmlFileExists) {
+            fileNodeExists = checkIfFileNodeExists();
+        } else {
+            //create XML-File
+            fileNodeExists = false;
+        }
+        if (!fileNodeExists) {
+            //create File-Node
+            //create sketch-Node
+        }
+        //updateSketchNode(sketchingActionsAsJSON);
+/*
+        var fileEntry = new NativeFileSystem.FileEntry(FileUtils.getNativeModuleDirectoryPath(module) + "/sketchmeister.xml");
+        FileUtils.writeText(fileEntry, img).done(function () {
+            console.log("Text successfully updated");
+        }).fail(function (err) {
+            console.log("Error writing text: " + err.name);
+        });
+*/
+        /*
         var canvas = $('#simple_sketch-' + _activeSketchingArea.id)[0];
         var img = canvas.toDataURL("image/png");
         var fileEntry = new NativeFileSystem.FileEntry(FileUtils.getNativeModuleDirectoryPath(module) + "/bildchen.txt");
@@ -367,9 +436,9 @@ define(function (require, exports, module) {
         }).fail(function (err) {
             console.log("Error writing text: " + err.name);
         });
-
+        */
     }
-    
+
     function loadSketchesAndImages() {
         var canvas = $('#simple_sketch-' + _activeSketchingArea.id)[0];
         var ctx = canvas.getContext("2d");
@@ -383,12 +452,36 @@ define(function (require, exports, module) {
         }).fail(function (err) {
             console.log("Error reading text: " + err.name);
         });
+
+
+    }
+    
+    function changeOfProject() {
+        //load xml-Datei oder erstellen, falls nix vorhanden
+        var fullProjectPath = ProjectManager.getProjectRoot().fullPath;
+        console.log("fullProjectPath: " + fullProjectPath);
         
+        var fileEntry = new NativeFileSystem.FileEntry(fullProjectPath + xmlFilename);
+        console.log("fileEntry: " + fileEntry);
+        FileUtils.readAsText(fileEntry).done(function (data, readTimestamp) {
+            console.log("found XML");
+            $xmlData = $.parseXML(data);
+        }).fail(function (err) {
+            console.log("not found XML");
+            createXMLNodeForProject(fullProjectPath);
+        });
         
+        console.log("not found xmlData: " + $xmlData);
     }
 
     function _addHandlers() {
-        $(DocumentManager).on("currentDocumentChange", currentDocumentChanged);
+        $(DocumentManager).on("currentDocumentChange", "").ready(function () {
+            currentDocumentChanged();
+        });
+        
+        $(ProjectManager).on("projectOpen", "").ready(function () {
+            changeOfProject();
+        });
 
         $(DocumentManager).on("documentSaved", saveSketchesAndImages);
 
@@ -406,6 +499,8 @@ define(function (require, exports, module) {
             moveImageLayerToTop();
             moveToolsToTop();
         });
+        
+        
 
     }
 
@@ -438,7 +533,8 @@ define(function (require, exports, module) {
         _addMenuItems();
         _addToolbarIcon();
         _addHandlers();
-        initSketchingAreas();
+        //
+        changeOfProject();
         var imageToAdd = {
             newImage: testImage
         };
@@ -446,11 +542,11 @@ define(function (require, exports, module) {
         $('body').delegate('.saveSketch', 'click', function () {
             saveSketchesAndImages();
         });
-        
+
         $('body').delegate('.loadSketch', 'click', function () {
             loadSketchesAndImages();
         });
-        
+
         $('body').delegate('.kineticjs-content', 'mousemove mousedown mouseup mouseleave hover', function (e) {
             e.preventDefault();
             _activeEditor.setSelection(_activeEditor.getCursorPos(), _activeEditor.getCursorPos());
@@ -475,17 +571,16 @@ define(function (require, exports, module) {
 
         $('body').delegate('.tools .color', 'click', function () {
             var id = _activeSketchingArea.id;
+            $('#tools-' + id + ' .edit').removeClass('selected');
             $('#tools-' + id + ' .eraser').removeClass('selected');
             $('#tools-' + id + ' .color').removeClass('selected');
             $(this).addClass('selected');
         });
 
-        $('body').delegate('.tools .layer', 'click', function () {
-            $('.tools .layer').removeClass('selected');
-            $(this).removeClass('layer');
-            var layer = $(this).attr('class');
-            $(this).addClass('layer');
-            $('.tools .' + layer).addClass('selected');
+        $('body').delegate('.tools .edit', 'click', function () {
+            var id = _activeSketchingArea.id;
+            $('#tools-' + id + ' .color').removeClass('selected');
+            $(this).addClass('selected');
         });
 
         $('body').delegate('.tools .size', 'click', function () {
@@ -507,7 +602,7 @@ define(function (require, exports, module) {
         $('body').delegate('.image-layer', 'click', function () {
             moveImageLayerToTop();
         });
-        $('body').delegate('.sketching-layer', 'click', function () {
+        $('body').delegate('.color, .size', 'click', function () {
             moveSketchingAreaToTop();
         });
 
