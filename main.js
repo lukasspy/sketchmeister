@@ -3,10 +3,10 @@
 
 define(function (require, exports, module) {
     "use strict";
-    
+
     var xmlFilename = "sketchmeister.xml";
-    var $xmlData;
-    
+    var xmlData, $xml;
+
     require('js/jquery-ui-1.10.0.custom.min');
     require('js/runmode');
     require('js/sketch');
@@ -58,14 +58,14 @@ define(function (require, exports, module) {
         return $('<' + name + ' />');
     };
 
-    function createXMLNodeForProject(fullPathOfProject) {
-        $xmlData = $('<project />');
-        $xmlData.append($.createElement("fullPath").text(fullPathOfProject));
+    function createProjectNode(fullPathOfProject) {
+        xmlData = $('<root><project fullPath="' + fullPathOfProject + '"/></root>');
+        $xml = $(xmlData);
     }
 
-    function createXMLNodeForFile(filename, relativePath) {
+    function createFileNode(filename, relativePath) {
         var newFile = $.createElement("file");
-        newFile.append($.createElement("filename").text(filename).attr('relativePath', relativePath));
+        newFile.attr("filename", filename).attr("path", relativePath);
         return newFile;
     }
 
@@ -309,7 +309,7 @@ define(function (require, exports, module) {
     }
 
     function currentDocumentChanged() {
-        
+        console.log("changeDocInitiated");
         // set the current Full Editor as _activeEditor
         _activeEditor = EditorManager.getCurrentFullEditor();
         // if _activeEditor gets scrolled then also scroll the sketching overlay
@@ -384,65 +384,86 @@ define(function (require, exports, module) {
     }
 
     function checkIfXMLFileExists(path) {
-        NativeFileSystem.resolveNativeFileSystemPath(path, function (entry) {
+        NativeFileSystem.resolveNativeFileSystemPath(path + xmlFilename, function (entry) {
             return true;
         }, function (err) {
             return false;
         });
     }
-    
-    function checkIfFileNodeExists() {
+
+    function checkIfFileNodeExists(filename, relativePath) {
+        return $xml.find("file[filename='" + filename + "'][path='" + relativePath + "']");
+    }
+
+    function checkIfSketchingNodeForFileNodeExists(filename, relativePath) {
+        return $xml.find("file[filename='" + filename + "'][path='" + relativePath + "'] sketchactions");
+    }
+
+    function setSketchingActionsAtNode(sketchingActionsAsJSON, filename, relativePath) {
+        $xml.find("file[filename='" + filename + "'][path='" + relativePath + "']").children("sketchingactions").remove();
+        $xml.find("file[filename='" + filename + "'][path='" + relativePath + "']").append("<sketchingactions>" + sketchingActionsAsJSON + "</sketchingactions>");
+        console.log("should be the complete file: " + $xml.html());
+    }
+
+    function readXmlFileData(callback) {
+        //load xml-Datei oder erstellen, falls nix vorhanden
+        var fullProjectPath = ProjectManager.getProjectRoot().fullPath;
+        var fileEntry = new NativeFileSystem.FileEntry(fullProjectPath + xmlFilename);
+        FileUtils.readAsText(fileEntry).done(function (data, readTimestamp) {
+            console.log("found XML: " +  data);
+            $xml = $(data);
+            console.log("afterReadingXMLFile: " + $xml.html());
+            if (typeof callback === 'function') { // make sure the callback is a function
+                callback.call(this); // brings the scope to the callback
+            }
+        }).fail(function (err) {
+            console.log("XML-file not found in project folder");
+            createProjectNode(fullProjectPath);
+
+            console.log("afterCreatingProjectNode: " + $xml.html());
+            if (typeof callback === 'function') { // make sure the callback is a function
+                callback.call(this); // brings the scope to the callback
+            }
+        });
+        
     }
 
     function saveSketchesAndImages() {
-        
         var sketchingActionsAsJSON = JSON.stringify(_activeSketchingArea.sketchArea.actions);
-        
+
         var filename = _activeDocument.file.name;
         var fullProjectPathAndFilename = _activeSketchingArea.fullPath;
         var fullProjectPath = ProjectManager.getProjectRoot().fullPath;
-        var relativeProjectPath = fullProjectPathAndFilename.replace(fullProjectPath, "").replace(filename, "");
+        var relativePath = fullProjectPathAndFilename.replace(fullProjectPath, "").replace(filename, "");
+        var fileNode;
+        var nodeForActiveFile;
 
-        console.log("fullProjectPath: " + fullProjectPath);
-        console.log("relativeProjectPath: " + relativeProjectPath);
-        console.log("filename: " + filename);
-        var fileNodeExists;
-        var xmlFileExists = checkIfXMLFileExists(fullProjectPathAndFilename);
-        if (xmlFileExists) {
-            fileNodeExists = checkIfFileNodeExists();
-        } else {
-            //create XML-File
-            fileNodeExists = false;
+        //check if node for activeFile is already in the xml
+        fileNode = checkIfFileNodeExists(filename, relativePath);
+        if (!fileNode.html()) {
+            nodeForActiveFile = createFileNode(filename, relativePath);
+            $xml.find("project").append(nodeForActiveFile);
         }
-        if (!fileNodeExists) {
-            //create File-Node
-            //create sketch-Node
-        }
-        //updateSketchNode(sketchingActionsAsJSON);
-/*
-        var fileEntry = new NativeFileSystem.FileEntry(FileUtils.getNativeModuleDirectoryPath(module) + "/sketchmeister.xml");
-        FileUtils.writeText(fileEntry, img).done(function () {
-            console.log("Text successfully updated");
-        }).fail(function (err) {
-            console.log("Error writing text: " + err.name);
+        setSketchingActionsAtNode(sketchingActionsAsJSON, filename, relativePath);
+    }
+
+    function save() {
+        readXmlFileData(function () {
+            saveSketchesAndImages();
+            console.log("savedSketchingActions: " + $xml.html());
+            var fileEntry = new NativeFileSystem.FileEntry(ProjectManager.getProjectRoot().fullPath + xmlFilename);
+            FileUtils.writeText(fileEntry, "<root>" + $xml.html() + "</root>").done(function () {
+                console.log("Text successfully updated");
+            }).fail(function (err) {
+                console.log("Error writing text: " + err.name);
+            });
         });
-*/
-        /*
-        var canvas = $('#simple_sketch-' + _activeSketchingArea.id)[0];
-        var img = canvas.toDataURL("image/png");
-        var fileEntry = new NativeFileSystem.FileEntry(FileUtils.getNativeModuleDirectoryPath(module) + "/bildchen.txt");
-        FileUtils.writeText(fileEntry, img).done(function () {
-            console.log("Text successfully updated");
-        }).fail(function (err) {
-            console.log("Error writing text: " + err.name);
-        });
-        */
     }
 
     function loadSketchesAndImages() {
         var canvas = $('#simple_sketch-' + _activeSketchingArea.id)[0];
         var ctx = canvas.getContext("2d");
-        var fileEntry = new NativeFileSystem.FileEntry(FileUtils.getNativeModuleDirectoryPath(module) + "/bildchen.txt");
+        var fileEntry = new NativeFileSystem.FileEntry(ProjectManager.getProjectRoot().fullPath + "/bildchen.txt");
         FileUtils.readAsText(fileEntry).done(function (data, readTimestamp) {
             var image = new Image();
             image.src = data;
@@ -455,35 +476,11 @@ define(function (require, exports, module) {
 
 
     }
-    
-    function changeOfProject() {
-        //load xml-Datei oder erstellen, falls nix vorhanden
-        var fullProjectPath = ProjectManager.getProjectRoot().fullPath;
-        console.log("fullProjectPath: " + fullProjectPath);
-        
-        var fileEntry = new NativeFileSystem.FileEntry(fullProjectPath + xmlFilename);
-        console.log("fileEntry: " + fileEntry);
-        FileUtils.readAsText(fileEntry).done(function (data, readTimestamp) {
-            console.log("found XML");
-            $xmlData = $.parseXML(data);
-        }).fail(function (err) {
-            console.log("not found XML");
-            createXMLNodeForProject(fullProjectPath);
-        });
-        
-        console.log("not found xmlData: " + $xmlData);
-    }
 
     function _addHandlers() {
-        $(DocumentManager).on("currentDocumentChange", "").ready(function () {
-            currentDocumentChanged();
-        });
+        $(DocumentManager).on("currentDocumentChange", currentDocumentChanged);
         
-        $(ProjectManager).on("projectOpen", "").ready(function () {
-            changeOfProject();
-        });
-
-        $(DocumentManager).on("documentSaved", saveSketchesAndImages);
+        $(DocumentManager).on("documentSaved", save);
 
         $('#toggle-sketching').click(function () {
             _toggleStatus();
@@ -499,8 +496,8 @@ define(function (require, exports, module) {
             moveImageLayerToTop();
             moveToolsToTop();
         });
-        
-        
+
+
 
     }
 
@@ -531,16 +528,18 @@ define(function (require, exports, module) {
 
     AppInit.appReady(function () {
         _addMenuItems();
+        
         _addToolbarIcon();
         _addHandlers();
+        currentDocumentChanged();
         //
-        changeOfProject();
+        //changeOfProject();
         var imageToAdd = {
             newImage: testImage
         };
 
         $('body').delegate('.saveSketch', 'click', function () {
-            saveSketchesAndImages();
+            save();
         });
 
         $('body').delegate('.loadSketch', 'click', function () {
