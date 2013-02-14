@@ -5,7 +5,7 @@ define(function (require, exports, module) {
     "use strict";
 
     var xmlFilename = "sketchmeister.xml";
-    var xmlData, $xml;
+    
 
     require('js/jquery-ui-1.10.0.custom.min');
     require('js/runmode');
@@ -34,9 +34,10 @@ define(function (require, exports, module) {
         Dialogs = brackets.getModule("widgets/Dialogs");
 
     var _sketchingAreaIdCounter = 0;
-
+    var xmlData, $xml;
     var loadCSSPromise = ExtensionUtils.loadStyleSheet(module, 'css/main.css');
     var active = false;
+    var firstActivation = true;
     var sketchIconActive = require.toUrl('./img/sketch_button_on.png');
     var sketchIconDeactive = require.toUrl('./img/sketch_button_off.png');
     var testImage = require.toUrl('./img/test.png');
@@ -49,6 +50,7 @@ define(function (require, exports, module) {
     var _activeLayer = "sketch";
     var imageLayer;
     var _codeMirror = null;
+    var _projectClosed = false;
 
     var allPaintingActions = [];
 
@@ -184,7 +186,7 @@ define(function (require, exports, module) {
 
     }
 
-    function _activate() {
+    function _activate(callback) {
         $(".overlay").show();
         $(".tools").show();
         /*      $(".overlay").show("slide", {
@@ -203,14 +205,14 @@ define(function (require, exports, module) {
     function _addSketchingTools(id) {
         $(_activeEditor.getScrollerElement()).append('<div class="tools" id="tools-' + id + '" style="height: ' + $(_activeEditor.getScrollerElement()).height() + 'px"></div>');
         $('#tools-' + id).append('<div class="seperator"></div>');
-        $('#tools-' + id).append("<a href='#' class='saveSketch button'>show</a> ");
+        $('#tools-' + id).append("<a href='#' class='saveSketch button'>save</a> ");
         $('#tools-' + id).append("<a href='#' class='loadSketch button'>load</a> ");
         //$('#tools-' + id).append("<a href='#' style='background: transparent' class='addImageToStage button'>add</a> ");
         //$('#tools-' + id).append("<a href='#' style='background: transparent' class='uploadDialog button'>Upl</a> ");
         //$('#tools-' + id).append("<input type='file' style='visibility:hidden;display:none' class='uploadButton'/>");
 
         $('#tools-' + id).append('<a href="#simple_sketch-' + id + '" data-undo="png" class="undo"></a>');
-        $('#tools-' + id).append("<a href='#simple_sketch-" + id + "' data-save='save' class='button'>save</a> ");
+       // $('#tools-' + id).append("<a href='#simple_sketch-" + id + "' data-save='save' class='button'>save</a> ");
 
         $('#tools-' + id).append('<div class="seperator">Image</div>');
         $('#tools-' + id).append("<a href='#' class='add-image button'>+</a> ");
@@ -255,18 +257,41 @@ define(function (require, exports, module) {
         $('#main-toolbar .buttons').prepend('<a href="#" id="toggle-sketching" title="SketchMeister"></a>');
         $('#toggle-sketching').css('background-image', 'url("' + sketchIconDeactive + '")');
     }
+    
+    function getSketchingActionsForThisFileFromXml(filename, relativePath) {
+        var actions = $xml.find("file[filename='" + filename + "'][path='" + relativePath + "']").find("sketchingactions");
+        // check if there are actions for this sketchingArea
+        // if yes then parse the JSON string and return else return an empty array -> default if no actions
+        if (actions.html() !== null) {
+            return JSON.parse(actions.html());
+        } else {
+            return [];
+        }
+    }
+    
+    function loadSketchingActionsFromXmlToSketchingArea() {
+        var filename = DocumentManager.getCurrentDocument().file.name;
+        var fullProjectPath = ProjectManager.getProjectRoot().fullPath;
+        var relativePath = _activeSketchingArea.fullPath.replace(fullProjectPath, "").replace(filename, "");
+        var actions = getSketchingActionsForThisFileFromXml(filename, relativePath);
+        _activeSketchingArea.sketchArea.actions = actions;
+        //_activeSketchingArea.sketchArea.action = null;
+        if (actions.length > 0) {
+            _activeSketchingArea.sketchArea.redraw();
+        }
+    }
 
     function _addSketchingArea(path) {
         var id = _sketchingAreaIdCounter++;
         var height = $(_activeEditor.getScrollerElement()).height();
         var width = $(_activeEditor.getScrollerElement()).width();
-        var totalHeight = _activeEditor.totalHeight(true);
+        var totalHeight = _activeEditor.totalHeight();
 
         $(_activeEditor.getScrollerElement()).append('<div class="overlay" id="overlay-' + id + '"><canvas class="simple_sketch" id="simple_sketch-' + id + '" width="' + width + '" height="' + totalHeight + '"></canvas></div>');
 
         //Resizer.makeResizable($("#overlay-" + id), "horz", "left", "10", 'true', 'false');
 
-        $("#overlay-" + id).css('height', height + 'px');
+        $("#overlay-" + id).css('height', totalHeight + 'px');
         $("#overlay-" + id).css('width', width + 'px');
         var sketchArea = $('#simple_sketch-' + id).sketch();
 
@@ -288,6 +313,7 @@ define(function (require, exports, module) {
             //console.log('wurde deaktiviert');
         }
         var length = _documentSketchingAreas.push(sketchingArea);
+        
         return length - 1;
     }
 
@@ -309,14 +335,15 @@ define(function (require, exports, module) {
     }
 
     function currentDocumentChanged() {
-        console.log("changeDocInitiated");
         // set the current Full Editor as _activeEditor
         _activeEditor = EditorManager.getCurrentFullEditor();
         // if _activeEditor gets scrolled then also scroll the sketching overlay
         $(_activeEditor).on("scroll", _scroll);
         // set the current Document as _activeDocument to get additional data of the file
         _activeDocument = DocumentManager.getCurrentDocument();
-        var _activeFullPath = _activeDocument.file.fullPath;
+        var _activeFullPath = DocumentManager.getCurrentDocument().file.fullPath;
+        
+        // go through all already opened sketchingAreas and check if opened file already has a sketchingArea
         var foundSketchingArea = -1;
         $.each(_documentSketchingAreas, function (key, sketchingArea) {
             if (sketchingArea.fullPath === _activeFullPath) {
@@ -324,25 +351,31 @@ define(function (require, exports, module) {
                 return false;
             }
         });
+        // if sketchingArea is already loaded set it as active, else create a new sketchingArea and add it to Array of sketchingAreas
         if (foundSketchingArea !== -1) {
+            // sketchingArea was found and it is set
             _activeSketchingArea = _documentSketchingAreas[foundSketchingArea];
         } else {
+            // sketchingArea is not in Array and will be created with _addSketching Area
             var key = _addSketchingArea(_activeFullPath);
             _activeSketchingArea = _documentSketchingAreas[key];
+            // check which layer is on top to stay in sync with other already open sketching areas
             if (_activeLayer === "sketch") {
                 moveSketchingAreaToTop();
             } else {
                 moveImageLayerToTop();
             }
-
+            //sketchingArea has been created and now the xml-file has to be checked if there are sketchingActions for that file
+            loadSketchingActionsFromXmlToSketchingArea();
         }
+        // set the active stage by referencing the stage of the active sketchingArea
         _activeStage = _activeSketchingArea.stage;
-
+        
+        
     }
 
     function deleteSketchingArea(id) {
         _documentSketchingAreas.splice(id, 1);
-        console.log(_documentSketchingAreas);
     }
 
     function removeOverlay() {
@@ -362,26 +395,9 @@ define(function (require, exports, module) {
         deleteSketchingArea(sketchingAreaToDelete);
     }
 
-    function _toggleStatus() {
-        if (active) {
-            _deactivate();
-        } else {
-            _activate();
-        }
-    }
+    
 
-    function _addMenuItems() {
-        var viewMenu = Menus.getMenu(Menus.AppMenuBar.VIEW_MENU);
-        viewMenu.addMenuDivider();
-
-        function registerCommandHandler(commandId, menuName, handler, shortcut) {
-            CommandManager.register(menuName, commandId, handler);
-            viewMenu.addMenuItem(commandId);
-            KeyBindingManager.addBinding(commandId, shortcut);
-        }
-
-        registerCommandHandler("lukasspy.sketchmeister.toggleActivation", "Enable Sketchmeister", _toggleStatus, "Ctrl-1");
-    }
+    
 
     function checkIfXMLFileExists(path) {
         NativeFileSystem.resolveNativeFileSystemPath(path + xmlFilename, function (entry) {
@@ -402,7 +418,6 @@ define(function (require, exports, module) {
     function setSketchingActionsAtNode(sketchingActionsAsJSON, filename, relativePath) {
         $xml.find("file[filename='" + filename + "'][path='" + relativePath + "']").children("sketchingactions").remove();
         $xml.find("file[filename='" + filename + "'][path='" + relativePath + "']").append("<sketchingactions>" + sketchingActionsAsJSON + "</sketchingactions>");
-        console.log("should be the complete file: " + $xml.html());
     }
 
     function readXmlFileData(callback) {
@@ -410,17 +425,12 @@ define(function (require, exports, module) {
         var fullProjectPath = ProjectManager.getProjectRoot().fullPath;
         var fileEntry = new NativeFileSystem.FileEntry(fullProjectPath + xmlFilename);
         FileUtils.readAsText(fileEntry).done(function (data, readTimestamp) {
-            console.log("found XML: " +  data);
             $xml = $(data);
-            console.log("afterReadingXMLFile: " + $xml.html());
             if (typeof callback === 'function') { // make sure the callback is a function
                 callback.call(this); // brings the scope to the callback
             }
         }).fail(function (err) {
-            console.log("XML-file not found in project folder");
             createProjectNode(fullProjectPath);
-
-            console.log("afterCreatingProjectNode: " + $xml.html());
             if (typeof callback === 'function') { // make sure the callback is a function
                 callback.call(this); // brings the scope to the callback
             }
@@ -431,7 +441,7 @@ define(function (require, exports, module) {
     function saveSketchesAndImages() {
         var sketchingActionsAsJSON = JSON.stringify(_activeSketchingArea.sketchArea.actions);
 
-        var filename = _activeDocument.file.name;
+        var filename = DocumentManager.getCurrentDocument().file.name;
         var fullProjectPathAndFilename = _activeSketchingArea.fullPath;
         var fullProjectPath = ProjectManager.getProjectRoot().fullPath;
         var relativePath = fullProjectPathAndFilename.replace(fullProjectPath, "").replace(filename, "");
@@ -450,10 +460,9 @@ define(function (require, exports, module) {
     function save() {
         readXmlFileData(function () {
             saveSketchesAndImages();
-            console.log("savedSketchingActions: " + $xml.html());
             var fileEntry = new NativeFileSystem.FileEntry(ProjectManager.getProjectRoot().fullPath + xmlFilename);
             FileUtils.writeText(fileEntry, "<root>" + $xml.html() + "</root>").done(function () {
-                console.log("Text successfully updated");
+                console.log("XML successfully updated");
             }).fail(function (err) {
                 console.log("Error writing text: " + err.name);
             });
@@ -476,9 +485,82 @@ define(function (require, exports, module) {
 
 
     }
+    
+    function insertFileToImageArea(files) {
+        $('.tools .layer').removeClass('selected');
+        $('.tools .image-layer').addClass('selected');
+        var i;
+        for (i = 0; i < files.length; i++) {
+            addImageToStage(files[i]);
+        }
+
+    }
+    
+    function _toggleStatus() {
+        if (active) {
+            _deactivate();
+            save();
+        } else {
+            if (firstActivation) {
+                readXmlFileData(function () {
+                    currentDocumentChanged();
+                });
+                firstActivation = false;
+            }
+            _activate();
+            
+            //vielleicht unnötig: wenn alles richtig geladen wird (project), dann reicht redraw in currentDocumentChanged vielleicht
+            
+        }
+    }
+    
+    function resetAllVariables() {
+        _sketchingAreaIdCounter = 0;
+        xmlData = "";
+        $xml = "";
+        active = false;
+        firstActivation = true;
+
+        _activeEditor = null;
+        _activeDocument = null;
+        _documentSketchingAreas = [];
+        _activeSketchingArea = null;
+        _activeStage = "";
+        _activeLayer = "sketch";
+        imageLayer = "";
+        _codeMirror = null;
+        allPaintingActions = [];
+    }
+    
+    function _addMenuItems() {
+        var viewMenu = Menus.getMenu(Menus.AppMenuBar.VIEW_MENU);
+        viewMenu.addMenuDivider();
+
+        function registerCommandHandler(commandId, menuName, handler, shortcut) {
+            CommandManager.register(menuName, commandId, handler);
+            viewMenu.addMenuItem(commandId);
+            KeyBindingManager.addBinding(commandId, shortcut);
+        }
+
+        registerCommandHandler("lukasspy.sketchmeister.toggleActivation", "Enable Sketchmeister", _toggleStatus, "Ctrl-1");
+    }
 
     function _addHandlers() {
-        $(DocumentManager).on("currentDocumentChange", currentDocumentChanged);
+        $(DocumentManager).on("currentDocumentChange", function () {
+            if (!_projectClosed) {
+                currentDocumentChanged();
+                _projectClosed = false;
+            }
+        });
+        
+        $(ProjectManager).on("projectOpen", function () {
+            resetAllVariables();
+        });
+        $(ProjectManager).on("beforeProjectClose", function () {
+            _projectClosed = true;
+            //save();
+            
+        });
         
         $(DocumentManager).on("documentSaved", save);
 
@@ -497,47 +579,6 @@ define(function (require, exports, module) {
             moveToolsToTop();
         });
 
-
-
-    }
-
-    function initSketchingAreas() {
-        currentDocumentChanged(); // Load up the currently open document, set all the variables such as editor which the Handlers need
-        $(".overlay").hide();
-        $(".tools").hide();
-        $('#toggle-sketching').css('background-image', 'url("' + sketchIconDeactive + '")');
-        active = false;
-        //$('body').append($(Mustache.render(addImageDialog)));
-    }
-
-    var myPanel = $('<div id="foo" class="sidebar">' +
-    //                     '<div >' +
-    //                     '<div class="title">Gallery</div></div>' +
-    //                     '<div class="table-container"><div class="gallery"></div></div>' +
-                    '</div>');
-
-    function insertFileToImageArea(files) {
-        $('.tools .layer').removeClass('selected');
-        $('.tools .image-layer').addClass('selected');
-        var i;
-        for (i = 0; i < files.length; i++) {
-            addImageToStage(files[i]);
-        }
-
-    }
-
-    AppInit.appReady(function () {
-        _addMenuItems();
-        
-        _addToolbarIcon();
-        _addHandlers();
-        currentDocumentChanged();
-        //
-        //changeOfProject();
-        var imageToAdd = {
-            newImage: testImage
-        };
-
         $('body').delegate('.saveSketch', 'click', function () {
             save();
         });
@@ -551,11 +592,6 @@ define(function (require, exports, module) {
             _activeEditor.setSelection(_activeEditor.getCursorPos(), _activeEditor.getCursorPos());
             return false;
         });
-
-
-        //myPanel.insertAfter("#sidebar");
-        //Resizer.makeResizable(myPanel, "horz", "right", 50, false, false);
-        //Resizer.hide(myPanel);
 
         $('body').delegate('.tools .button', 'click', function () {
             var id = _activeSketchingArea.id;
@@ -595,15 +631,27 @@ define(function (require, exports, module) {
             }, function (err) {});
             //addImageToStage(testImage);
         });
-        $('.saveSketch').click(function () {
-            //sketchGetURL();
-        });
+
         $('body').delegate('.image-layer', 'click', function () {
             moveImageLayerToTop();
         });
         $('body').delegate('.color, .size', 'click', function () {
             moveSketchingAreaToTop();
         });
+
+    }
+
+    AppInit.appReady(function () {
+        
+        _addMenuItems();
+        _addToolbarIcon();
+        _addHandlers();
+
+        var imageToAdd = {
+            newImage: testImage
+        };
+
+
 
         /*$('.gallery').click(function () {
             //Dialogs.showModalDialog("add-image-dialog");
@@ -631,10 +679,7 @@ define(function (require, exports, module) {
             //$('.gallery-container').load('http://www.spy-web.de/sketch/gallery.php');
         });*/
 
-        $('.uploadDialog').click(function () {
-            Resizer.toggle(myPanel);
-            //$('input[type=file].uploadButton').click();
-        });
+
         //loadImages(sources, initStage);
     });
 });
