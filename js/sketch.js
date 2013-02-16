@@ -63,6 +63,9 @@ var __slice = Array.prototype.slice;
                     if ($(this).attr('data-undo')) {
                         sketch.undo();
                     }
+                    if ($(this).attr('data-clear')) {
+                        sketch.clear();
+                    }
                     if ($(this).attr('data-save')) {
                         sketch.saveActions();
                     }
@@ -73,6 +76,12 @@ var __slice = Array.prototype.slice;
                 });
             }
         }
+        Sketch.prototype.clear = function () {
+            this.actions = [];
+            this.redraw();
+            return this.actions.length;
+        };
+        
         Sketch.prototype.undo = function () {
             this.actions.pop();
             this.redraw();
