@@ -35,10 +35,6 @@
     background: transparent url('../img/add.png') bottom right no-repeat;
 }
 
-#missionControl .controls a.add:hover {
-    //background-color: #990011;   
-}
-
 .overlay {
     display: block;
     z-index: 1;
@@ -54,7 +50,7 @@
     top: 35px;
     right: 0;
     width: 60px;
-    z-index: 99999;
+    z-index: 200;
     background-color: #46494B;
     font-weight: normal;
     font-size: 13px;

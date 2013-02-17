@@ -7,8 +7,8 @@ define(function (require, exports, module) {
     var xmlFilename = "sketchmeister.xml";
     
 
-    require('js/jquery-ui-1.10.0.custom.min');
-    require('js/runmode');
+    //require('js/jquery-ui-1.10.0.custom.min');
+    //require('js/runmode');
     require('js/sketch');
     require('js/json2');
     require('js/kinetic-v4.3.1');
@@ -181,18 +181,7 @@ define(function (require, exports, module) {
     
 
     /*----- functions for sketching area ------*/
-    function _deactivate() {
-        $(".tools").hide();
-        $('#toggle-sketching').css('background-image', 'url("' + sketchIconDeactive + '")');
-        active = false;
 
-    }
-
-    function _activate() {
-        $(".tools").show();
-        $('#toggle-sketching').css('background-image', 'url("' + sketchIconActive + '")');
-        active = true;
-    }
 
     function _addSketchingTools(id) {
         $(_activeEditor.getScrollerElement()).append('<div class="tools" id="tools-' + id + '" style="height: ' + $(_activeEditor.getScrollerElement()).height() + 'px"></div>');
@@ -273,6 +262,19 @@ define(function (require, exports, module) {
             _activeSketchingArea.sketchArea.redraw();
         }
     }
+    
+        
+    function _deactivate() {
+        $(".tools").hide();
+        $('#toggle-sketching').css('background-image', 'url("' + sketchIconDeactive + '")');
+        active = false;
+    }
+
+    function _activate() {
+        $(".tools").show();
+        $('#toggle-sketching').css('background-image', 'url("' + sketchIconActive + '")');
+        active = true;
+    }
 
     function _addSketchingArea(path) {
         var id = _sketchingAreaIdCounter++;
@@ -283,8 +285,6 @@ define(function (require, exports, module) {
         var totalHeight = _activeEditor.totalHeight();
 
         $("#myPanel").append('<div class="overlay" id="overlay-' + id + '"><canvas class="simple_sketch" id="simple_sketch-' + id + '" width="' + width + '" height="' + totalHeight + '"></canvas></div>');
-
-        //Resizer.makeResizable($("#overlay-" + id), "horz", "left", "10", 'true', 'false');
 
         $("#overlay-" + id).css('height', totalHeight + 'px');
         //$("#overlay-" + id).css('width', width + 'px');
@@ -307,7 +307,6 @@ define(function (require, exports, module) {
             //console.log('wurde deaktiviert');
         }
         var length = _documentSketchingAreas.push(sketchingArea);
-        
         return length - 1;
     }
 
@@ -342,7 +341,9 @@ define(function (require, exports, module) {
         var foundSketchingArea = -1;
         $.each(_documentSketchingAreas, function (key, sketchingArea) {
             sketchingArea.active = false;
-            $('#overlay-' + sketchingArea.id).hide();
+            if (active) {
+                $('#overlay-' + sketchingArea.id).hide();
+            }
             if (sketchingArea.fullPath === _activeFullPath) {
                 console.log(sketchingArea.fullPath + " and " + _activeFullPath);
                 foundSketchingArea = key;
@@ -355,6 +356,7 @@ define(function (require, exports, module) {
             _activeSketchingArea.active = true;
         } else {
             // sketchingArea is not in Array and will be created with _addSketching Area
+            console.log("beim erstellen: " + myPanel.width());
             var key = _addSketchingArea(_activeFullPath);
             _activeSketchingArea = _documentSketchingAreas[key];
             // check which layer is on top to stay in sync with other already open sketching areas
@@ -369,7 +371,9 @@ define(function (require, exports, module) {
         }
         // set the active stage by referencing the stage of the active sketchingArea
         _activeStage = _activeSketchingArea.stage;
-        $('#overlay-' + _activeSketchingArea.id).show();
+        if (active) {
+            $('#overlay-' + _activeSketchingArea.id).show();
+        }
         
         
     }
@@ -394,10 +398,6 @@ define(function (require, exports, module) {
         });
         deleteSketchingArea(sketchingAreaToDelete);
     }
-
-    
-
-    
 
     function checkIfXMLFileExists(path) {
         NativeFileSystem.resolveNativeFileSystemPath(path + xmlFilename, function (entry) {
@@ -517,51 +517,6 @@ define(function (require, exports, module) {
 
     }
     
-    function hideMyPanel() {
-        $('#editor-holder').css('margin-right', "0");
-        myPanel.hide();
-    }
-    
-    function showMyPanel() {
-        $('#editor-holder').css('margin-right', myPanel.width());
-        myPanel.show();
-    }
-    
-    function setSizeOfMyPanel(space) {
-        var windowsWidth = $('.content').width();
-        console.log("width: " + $('.content').width());
-        var widthOfMyPanel = (space > 0) ? (windowsWidth / space) : 0;
-        $('#editor-holder').css('margin-right', widthOfMyPanel);
-        myPanel.css("width", widthOfMyPanel);
-
-    }
-    
-    function _addMyPanel() {
-        setSizeOfMyPanel(3);
-        myPanel.insertAfter($('.content'));
-        hideMyPanel();
-    }
-    
-    function _toggleStatus() {
-        if (active) {
-            _deactivate();
-            saveAll();
-            hideMyPanel();
-        } else {
-            if (firstActivation) {
-                readXmlFileData(function () {
-                    currentDocumentChanged();
-
-                });
-                firstActivation = false;
-            }
-            _activate();
-            showMyPanel();
-
-        }
-        //Resizer.toggle(myPanel);
-    }
-    
     function MissionControl() {
         this.overlay = $('<div id="missionControl"><div class="controls"><a href="#" class="add"></a></div></div>');
         this.active = false;
@@ -665,36 +620,67 @@ define(function (require, exports, module) {
         allPaintingActions = [];
     }
     
-    function _addMenuItems() {
-        var viewMenu = Menus.getMenu(Menus.AppMenuBar.VIEW_MENU);
-        viewMenu.addMenuDivider();
+    function setSizeOfMyPanel(space) {
+        var windowsWidth = $('.content').width();
+        console.log("width: " + $('.content').width());
+        var widthOfMyPanel = (space > 0) ? (windowsWidth / space) : 0;
+        $('#editor-holder').css('margin-right', widthOfMyPanel);
+        myPanel.css("width", widthOfMyPanel);
+        console.log(myPanel.css("width"));
 
-        function registerCommandHandler(commandId, menuName, handler, shortcut) {
-            CommandManager.register(menuName, commandId, handler);
-            viewMenu.addMenuItem(commandId);
-            KeyBindingManager.addBinding(commandId, shortcut);
-        }
-
-        registerCommandHandler("lukasspy.sketchmeister.toggleSketchmeister", "Enable Sketchmeister", _toggleStatus, "Ctrl-1");
-        registerCommandHandler("lukasspy.sketchmeister.toggleMissionControl", "Enable MissionControl", _toggleMissionControl, "Alt-1");
     }
     
+    function hideMyPanel() {
+        $('#editor-holder').css('margin-right', "0");
+        myPanel.hide();
+    }
     
+    function showMyPanel() {
+        $('#editor-holder').css('margin-right', myPanel.width());
+        myPanel.show();
+    }
+    
+    function _addMyPanel() {
+        //setSizeOfMyPanel(3);
+        myPanel.insertAfter($('.content'));
+        hideMyPanel();
+    }
+    
+    function _toggleStatus() {
+        if (active) {
+            _deactivate();
+            saveAll();
+            hideMyPanel();
+        } else {
+            setSizeOfMyPanel(3);
+            _activate();
+            if (firstActivation) {
+                console.log("vor docchange: " + myPanel.width());
+                currentDocumentChanged();
+                firstActivation = false;
+            }
+            $.each(_documentSketchingAreas, function (key, sketchingArea) {
+                if (sketchingArea.active) {
+                    $("#overlay-" + sketchingArea.id).show();
+                }
+            });
+            showMyPanel();
+        }
+        //Resizer.toggle(myPanel);
+    }
 
     function _addHandlers() {
         $(DocumentManager).on("currentDocumentChange", function () {
             if (!firstActivation) {
                 if (!_projectClosed) {
-                    console.log('document switch');
                     currentDocumentChanged();
                     _projectClosed = false;
-                    console.log("callback funzt");
                 }
                 if (active) {
                     saveAll();
                 }
-                console.log("change made");
             }
+            console.log(_documentSketchingAreas);
         });
         
         $(ProjectManager).on("projectOpen", function () {
@@ -812,21 +798,32 @@ define(function (require, exports, module) {
 
     }
     
-    
+    function _addMenuItems() {
+        var viewMenu = Menus.getMenu(Menus.AppMenuBar.VIEW_MENU);
+        viewMenu.addMenuDivider();
+
+        function registerCommandHandler(commandId, menuName, handler, shortcut) {
+            CommandManager.register(menuName, commandId, handler);
+            viewMenu.addMenuItem(commandId);
+            KeyBindingManager.addBinding(commandId, shortcut);
+        }
+
+        registerCommandHandler("lukasspy.sketchmeister.toggleSketchmeister", "Enable Sketchmeister", _toggleStatus, "Ctrl-1");
+        registerCommandHandler("lukasspy.sketchmeister.toggleMissionControl", "Enable MissionControl", _toggleMissionControl, "Alt-1");
+    }
 
     AppInit.appReady(function () {
         
-        _addMenuItems();
-        _addToolbarIcon();
-        _addHandlers();
-        _addMyPanel();
-        missionControl = new MissionControl();
-        missionControl.init();
-        console.log(missionControl.overlay);
         
-        var imageToAdd = {
-            newImage: testImage
-        };
+        readXmlFileData(function () {
+            _addMenuItems();
+            _addToolbarIcon();
+            _addHandlers();
+            _addMyPanel();
+            missionControl = new MissionControl();
+            missionControl.init();
+        });
+        
         
         //Resizer.makeResizable(myPanel, "horz", "right", "200");
         
