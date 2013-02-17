@@ -111,6 +111,7 @@ function addAnchor(group, x, y, name) {
     group.add(anchor);
     allAnchors.push(anchor);
 }
+
 function loadImages(sources, callback) {
     var images = {};
     var loadedImages = 0;

@@ -5,7 +5,7 @@
     right: 0;
     border-left: 1px solid #e8e8e8;
     height: 100%;
-    overflow-y: hidden;
+    overflow-y: auto;
     overflow-x: scroll;
 }
 
@@ -21,18 +21,34 @@
 #missionControl .controls {
     position: absolute;
     bottom: 15px;
-    right: 12px; 
     z-index: 22;
+}
+
+#missionControl .left {
+    left: 12px; 
+}
+
+#missionControl .right {
+    right: 12px;
 }
 
 #missionControl .controls a {
     width: 48px;
     height: 48px;
     display: block;
+    float: left;
 }
 
 #missionControl .controls a.add {
     background: transparent url('../img/add.png') bottom right no-repeat;
+}
+
+#missionControl .controls a.zoomin {
+    background: transparent url('../img/zoomin.png') bottom right no-repeat;
+}
+
+#missionControl .controls a.zoomout {
+    background: transparent url('../img/zoomout.png') bottom right no-repeat;
 }
 
 .overlay {
