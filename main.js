@@ -345,7 +345,6 @@ define(function (require, exports, module) {
                 $('#overlay-' + sketchingArea.id).hide();
             }
             if (sketchingArea.fullPath === _activeFullPath) {
-                console.log(sketchingArea.fullPath + " and " + _activeFullPath);
                 foundSketchingArea = key;
             }
         });
@@ -374,8 +373,6 @@ define(function (require, exports, module) {
         if (active) {
             $('#overlay-' + _activeSketchingArea.id).show();
         }
-        
-        
     }
 
     function deleteSketchingArea(id) {
@@ -654,16 +651,9 @@ define(function (require, exports, module) {
         } else {
             setSizeOfMyPanel(3);
             _activate();
-            if (firstActivation) {
-                console.log("vor docchange: " + myPanel.width());
-                currentDocumentChanged();
-                firstActivation = false;
-            }
-            $.each(_documentSketchingAreas, function (key, sketchingArea) {
-                if (sketchingArea.active) {
-                    $("#overlay-" + sketchingArea.id).show();
-                }
-            });
+            currentDocumentChanged();
+            myPanel.find("canvas").width(myPanel.width());
+            _activeSketchingArea.sketchArea.redraw();
             showMyPanel();
         }
         //Resizer.toggle(myPanel);
@@ -671,16 +661,10 @@ define(function (require, exports, module) {
 
     function _addHandlers() {
         $(DocumentManager).on("currentDocumentChange", function () {
-            if (!firstActivation) {
-                if (!_projectClosed) {
-                    currentDocumentChanged();
-                    _projectClosed = false;
-                }
-                if (active) {
-                    saveAll();
-                }
+            currentDocumentChanged();
+            if (active) {
+                saveAll();
             }
-            console.log(_documentSketchingAreas);
         });
         
         $(ProjectManager).on("projectOpen", function () {
@@ -813,8 +797,6 @@ define(function (require, exports, module) {
     }
 
     AppInit.appReady(function () {
-        
-        
         readXmlFileData(function () {
             _addMenuItems();
             _addToolbarIcon();
