@@ -63,48 +63,75 @@ function hideAnchors(stage) {
     }
 }
 
-function addDeleteAnchor(group, x, y, name) {
+function addMagnet(group, x, y) {
     var stage = group.getStage();
     var layer = group.getLayer();
     
     var anchor = new Kinetic.Circle({
         x: x,
         y: y,
-        stroke: '#666',
-        fill: '#ddd',
+        stroke: 'rgba(0,0,0,0.6)',
+        fill: 'rgba(0,0,0,0.4)',
         strokeWidth: 1,
         radius: 8,
-        name: name,
+        name: 'magnet',
         draggable: true,
-        dragOnTop: false
+        dragOnTop: true
     });
-    anchor.on('mousedown', function () {
-        console.log('delete');
+    anchor.on('mousedown', function (e) {
+        group.setDraggable(false);
+        console.log('magnet clicked');
+    });
+    
+    anchor.on('mouseover', function () {
+        document.body.style.cursor = "pointer";
+        this.setStrokeWidth(3);
+        layer.draw();
+    });
+    anchor.on('dragend', function () {
+        group.setDraggable(true);
+        layer.draw();
+    });
+    anchor.on('mouseout', function () {
+        group.setDraggable(true);
+        this.setStrokeWidth(1);
+        layer.draw();
     });
     group.add(anchor);
-    allAnchors.push(anchor);
+    console.log(group);
+    //allAnchors.push(anchor);
     
 }
 
 function addAnchor(group, x, y, name, delCursor) {
     var stage = group.getStage();
     var layer = group.getLayer();
-    var radius = 0;
+    var radius = 8;
     var draggable = true;
-    var fill = '#ddd';
-    var stroke = '#aaa';
+    var fill = 'transparent';
+    var stroke = 'transparent';
     var cursorStyle = "pointer";
     
-    if (name === "topRight") {
+    if (name === "topLeft") {
         radius = 8;
         draggable = false;
         fill = '#D93D2B';
         stroke = '#9E2900';
     } else if (name === "bottomRight") {
         radius = 8;
-        fill = '#F5A436';
-        stroke = '#EE8900';
+        fill = 'transparent';
+        stroke = 'transparent';
         cursorStyle = 'nwse-resize';
+    } else if (name === "bottomLeft") {
+        radius = 8;
+        fill = 'transparent';
+        stroke = 'transparent';
+        cursorStyle = 'nesw-resize';
+    } else if (name === "topRight") {
+        radius = 8;
+        fill = '#447E82';
+        stroke = '#376568';
+        cursorStyle = 'crosshair';
     }
     var anchor = new Kinetic.Circle({
         x: x,
@@ -122,8 +149,8 @@ function addAnchor(group, x, y, name, delCursor) {
         layer.draw();
     });
     
-    if (name === "topRight") {
-        anchor.on('mousedown touchstart', function () {
+    if (name === "topLeft") {
+        anchor.on('mouseup touchend', function () {
             group.setDraggable(false);
             
             if (confirm("Remove the image!")) {
@@ -132,6 +159,11 @@ function addAnchor(group, x, y, name, delCursor) {
                 stage.draw();
             }
          });
+    } else if (name === "topRight") {
+        anchor.on('mouseup touchend', function () {
+            addMagnet(group, 40, 40);
+            layer.draw();
+        });
     } else {
         anchor.on('mousedown touchstart', function () {
             group.setDraggable(false);
@@ -145,10 +177,12 @@ function addAnchor(group, x, y, name, delCursor) {
     // add hover styling
     anchor.on('mouseover', function () {
         document.body.style.cursor = cursorStyle;
+        group.get(".image")[0].setStroke("#EE8900");
         stage.draw();
     });
     anchor.on('mouseout', function () {
         document.body.style.cursor = 'default';
+        group.get(".image")[0].setStroke("transparent");
         group.setDraggable(true);
         stage.draw();
     });
