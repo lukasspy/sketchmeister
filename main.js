@@ -1,5 +1,5 @@
 /*jslint vars: true, plusplus: true, devel: true, nomen: true, regexp: true, indent: 4, maxerr: 50, browser: true*/
-/*global define, $, brackets, window, CodeMirror, document, Kinetic, addImageToStage, addAnchor, showAnchors, hideAnchors */
+/*global define, $, brackets, window, CodeMirror, document, Kinetic, addImageToStage, addAnchor, addDeleteAnchor, showAnchors, hideAnchors */
 
 define(function (require, exports, module) {
     "use strict";
@@ -42,6 +42,7 @@ define(function (require, exports, module) {
     var sketchIconActive = require.toUrl('./img/sketch_button_on.png');
     var sketchIconDeactive = require.toUrl('./img/sketch_button_off.png');
     var testImage = require.toUrl('./img/test.png');
+    var delCursor = require.toUrl('./img/cursor-delete.gif');
 
     var _activeEditor = null;
     var _activeDocument = null;
@@ -111,8 +112,8 @@ define(function (require, exports, module) {
         var stageObjectInXml = $xml.find("file[filename='" + filename + "'][path='" + relativePath + "']").find("stage");
         if (stageObjectInXml.html() !== null) {
             stage = Kinetic.Node.create(stageObjectInXml.html(), container);
-            stage.setWidth(myPanel.width());
-            stage.setHeight(myPanel.height());
+            stage.setWidth(width);
+            stage.setHeight(height);
             var groups = stage.get(".group");
             
             var images = stage.get(".image");
@@ -130,13 +131,31 @@ define(function (require, exports, module) {
                     group.get(".bottomLeft")[0].destroy();
                     group.get(".bottomRight")[0].destroy();
                     
+                    //addDeleteAnchor(group, width, 0, 'delete');
+                    //addAnchor(group, width, height, 'bottomRight');
+                    
                     addAnchor(group, 0, 0, 'topLeft');
                     addAnchor(group, width, 0, 'topRight');
                     addAnchor(group, width, height, 'bottomRight');
                     addAnchor(group, 0, height, 'bottomLeft');
+                    
                     hideAnchors(stage);
                     
                     image.setImage(tempImage);
+                    
+                    image.on('mouseover', function () {
+                        var layer = this.getLayer();
+                        document.body.style.cursor = "move";
+                        this.setStroke("#EE8900");
+                        layer.draw();
+                    });
+                    image.on('mouseout', function () {
+                        var layer = this.getLayer();
+                        document.body.style.cursor = 'default';
+                        this.setStroke("transparent");
+                        layer.draw();
+                    });
+                    
                     $('#tempImage').remove();
                     image.getLayer().draw();
                 });
@@ -180,12 +199,29 @@ define(function (require, exports, module) {
                     group.get(".bottomLeft")[0].destroy();
                     group.get(".bottomRight")[0].destroy();
                     
+                    //addDeleteAnchor(group, width, 0, 'delete');
+                    //addAnchor(group, width, height, 'bottomRight');
+                    
                     addAnchor(group, 0, 0, 'topLeft');
                     addAnchor(group, width, 0, 'topRight');
                     addAnchor(group, width, height, 'bottomRight');
                     addAnchor(group, 0, height, 'bottomLeft');
                     
                     image.setImage(tempImage);
+                    
+                    image.on('mouseover', function () {
+                        var layer = this.getLayer();
+                        document.body.style.cursor = "move";
+                        this.setStroke("#EE8900");
+                        layer.draw();
+                    });
+                    image.on('mouseout', function () {
+                        var layer = this.getLayer();
+                        document.body.style.cursor = 'default';
+                        this.setStroke("transparent");
+                        layer.draw();
+                    });
+                    
                     $('#tempImage').remove();
                     image.getLayer().draw();
                 });
@@ -230,25 +266,50 @@ define(function (require, exports, module) {
             var newImg = new Kinetic.Image({
                 x: 0,
                 y: 0,
+                stroke: "transparent",
+                strokeWidth: 2,
                 image: tempImage,
                 width: widthResized,
                 height: heightResized,
                 name: 'image',
                 src: tempImage.src
             });
-
+            
+            newImg.on('mouseover', function () {
+                var layer = this.getLayer();
+                document.body.style.cursor = "move";
+                this.setStroke("#EE8900");
+                layer.draw();
+            });
+            newImg.on('mouseout', function () {
+                var layer = this.getLayer();
+                document.body.style.cursor = 'default';
+                this.setStroke("transparent");
+                layer.draw();
+            });
+            /*
+            newImg.on('mouseover', function () {
+                this.setStrokeWidth(4);
+            });
+            
+            newImg.on('mouseout', function () {
+                this.setStrokeWidth(0);
+            });
+            */
             imageGroup.add(newImg);
             var thisImageLayer = _activeSketchingArea.stage.getChildren()[0];
             thisImageLayer.add(imageGroup);
 
             addAnchor(imageGroup, 0, 0, 'topLeft');
-            addAnchor(imageGroup, widthResized, 0, 'topRight');
+            addAnchor(imageGroup, widthResized, 0, 'topRight', delCursor);
+            //addDeleteAnchor(imageGroup, widthResized, 0, 'delete');
             addAnchor(imageGroup, widthResized, heightResized, 'bottomRight');
             addAnchor(imageGroup, 0, heightResized, 'bottomLeft');
-
             imageGroup.on('dragstart', function () {
                 this.moveToTop();
             });
+            
+            
             _activeSketchingArea.stage.draw();
             $('#tempImage').remove();
         });
@@ -677,6 +738,19 @@ define(function (require, exports, module) {
                 height: heightResized,
                 name: 'image',
                 src: tempImage.src
+            });
+            
+            newImg.on('mouseover', function () {
+                var layer = this.getLayer();
+                document.body.style.cursor = "move";
+                this.setStroke("#EE8900");
+                layer.draw();
+            });
+            newImg.on('mouseout', function () {
+                var layer = this.getLayer();
+                document.body.style.cursor = 'default';
+                this.setStroke("transparent");
+                layer.draw();
             });
     
             imageGroup.add(newImg);

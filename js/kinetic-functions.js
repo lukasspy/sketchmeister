@@ -3,11 +3,9 @@
 
 var sketchIconActive = require.toUrl('./sketch_button_on.png');
 var sketchIconDeactive = require.toUrl('./sketch_button_off.png');
-
 var allAnchors = new Array();
 
 function update(activeAnchor) {
-    
     var group = activeAnchor.getParent();
 
     var topLeft = group.get('.topLeft')[0];
@@ -18,7 +16,6 @@ function update(activeAnchor) {
 
     var anchorX = activeAnchor.getX();
     var anchorY = activeAnchor.getY();
-
     // update anchor positions
     switch (activeAnchor.getName()) {
     case 'topLeft':
@@ -66,7 +63,7 @@ function hideAnchors(stage) {
     }
 }
 
-function addAnchor(group, x, y, name) {
+function addDeleteAnchor(group, x, y, name) {
     var stage = group.getStage();
     var layer = group.getLayer();
     
@@ -81,33 +78,80 @@ function addAnchor(group, x, y, name) {
         draggable: true,
         dragOnTop: false
     });
+    anchor.on('mousedown', function () {
+        console.log('delete');
+    });
+    group.add(anchor);
+    allAnchors.push(anchor);
     
+}
+
+function addAnchor(group, x, y, name, delCursor) {
+    var stage = group.getStage();
+    var layer = group.getLayer();
+    var radius = 0;
+    var draggable = true;
+    var fill = '#ddd';
+    var stroke = '#aaa';
+    var cursorStyle = "pointer";
+    
+    if (name === "topRight") {
+        radius = 8;
+        draggable = false;
+        fill = '#D93D2B';
+        stroke = '#9E2900';
+    } else if (name === "bottomRight") {
+        radius = 8;
+        fill = '#F5A436';
+        stroke = '#EE8900';
+        cursorStyle = 'nwse-resize';
+    }
+    var anchor = new Kinetic.Circle({
+        x: x,
+        y: y,
+        stroke: stroke,
+        fill: fill,
+        strokeWidth: 1,
+        radius: radius,
+        name: name,
+        draggable: draggable,
+        dragOnTop: false
+    }); 
     anchor.on('dragmove', function () {
         update(this);
         layer.draw();
     });
-    anchor.on('mousedown touchstart', function () {
-        group.setDraggable(false);
-        this.moveToTop();
-    });
+    
+    if (name === "topRight") {
+        anchor.on('mousedown touchstart', function () {
+            group.setDraggable(false);
+            
+            if (confirm("Remove the image!")) {
+                group.removeChildren();
+                group.remove();
+                stage.draw();
+            }
+         });
+    } else {
+        anchor.on('mousedown touchstart', function () {
+            group.setDraggable(false);
+            this.moveToTop();
+        });
+    }
     anchor.on('dragend', function () {
         group.setDraggable(true);
         layer.draw();
     });
     // add hover styling
     anchor.on('mouseover', function () {
-        var layer = this.getLayer();
-        document.body.style.cursor = 'pointer';
-        this.setStrokeWidth(4);
-        layer.draw();
+        document.body.style.cursor = cursorStyle;
+        stage.draw();
     });
     anchor.on('mouseout', function () {
-        var layer = this.getLayer();
         document.body.style.cursor = 'default';
-        this.setStrokeWidth(2);
-        layer.draw();
+        group.setDraggable(true);
+        stage.draw();
     });
-
     group.add(anchor);
     allAnchors.push(anchor);
 }
