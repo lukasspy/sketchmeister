@@ -4,6 +4,7 @@
 var sketchIconActive = require.toUrl('./sketch_button_on.png');
 var sketchIconDeactive = require.toUrl('./sketch_button_off.png');
 var allAnchors = new Array();
+var EditorManager = brackets.getModule("editor/EditorManager");
 
 function update(activeAnchor) {
     var group = activeAnchor.getParent();
@@ -35,7 +36,7 @@ function update(activeAnchor) {
         topLeft.setX(anchorX);
         break;
     }
-
+    
     image.setPosition(topLeft.getPosition());
 
     var width = topRight.getX() - topLeft.getX();
@@ -63,47 +64,93 @@ function hideAnchors(stage) {
     }
 }
 
-function addMagnet(group, x, y) {
+function addMagnet(group, x, y, connection) {
     var stage = group.getStage();
     var layer = group.getLayer();
-    
-    var anchor = new Kinetic.Circle({
+    var position = null;
+    var selection = null;
+    var magnet = new Kinetic.Circle({
         x: x,
         y: y,
-        stroke: 'rgba(0,0,0,0.6)',
-        fill: 'rgba(0,0,0,0.4)',
+        stroke: 'rgba(251,167,13,1);',
+        fill: 'rgba(251,167,13,0.5);',
         strokeWidth: 1,
         radius: 8,
         name: 'magnet',
         draggable: true,
-        dragOnTop: true
+        dragOnTop: true,
+        connection: connection
     });
-    anchor.on('mousedown', function (e) {
+    magnet.on('mousedown', function (e) {
         group.setDraggable(false);
-        console.log('magnet clicked');
     });
     
-    anchor.on('mouseover', function () {
+    magnet.on('mouseup', function (e) {
+        var activeEditor = EditorManager.getCurrentFullEditor();
+        var connection = JSON.parse(this.attrs.connection);
+        activeEditor.setSelection(connection.start, connection.end, true);
+        $('.CodeMirror-selected').addClass('selectionLink');
+        $('#hightlightTop').remove();
+        $('#hightlightBottom').remove();
+        selection = connection;
+    });
+    
+    magnet.on('mouseover', function () {
+        var activeEditor = EditorManager.getCurrentFullEditor();
+
+        // get the y-scroll position of editor and divide by line-height to get firstVisibleLine
+        var scrollPos = activeEditor.getScrollPos();
+        var lineHeight = $('.CodeMirror').css('line-height').replace('px','');
+        var firstVisibleLine = Math.ceil(scrollPos.y / lineHeight);
+        var editorHeight = $(activeEditor.getScrollerElement()).height();
+        var lastVisibleLine = Math.floor((scrollPos.y + editorHeight) / lineHeight) - 1;
+        
         document.body.style.cursor = "pointer";
         this.setStrokeWidth(3);
         layer.draw();
+        // Save the current selection or position of cursor to restore after mouseleave
+        if(activeEditor.hasSelection()) {
+            selection = activeEditor.getSelection();
+        } else {
+            position = activeEditor.getCursorPos();
+        }
+        var connection = JSON.parse(this.attrs.connection);
+        if(firstVisibleLine < connection.start.line && connection.end.line < lastVisibleLine) {
+            activeEditor.setSelection(connection.start, connection.end, false);
+            $('.CodeMirror-selected').addClass('selectionLink');
+        } else if (connection.start.line < firstVisibleLine) {
+            $('#editor-holder').append('<div id="hightlightTop"></div>');
+        } else if (connection.end.line > lastVisibleLine) {
+            $('#editor-holder').append('<div id="hightlightBottom"></div>');
+        }
     });
-    anchor.on('dragend', function () {
+    magnet.on('dragend', function () {
         group.setDraggable(true);
         layer.draw();
     });
-    anchor.on('mouseout', function () {
+    magnet.on('mouseout', function () {
+        var activeEditor = EditorManager.getCurrentFullEditor();
         group.setDraggable(true);
         this.setStrokeWidth(1);
         layer.draw();
+        // restore initial selection or position of cursor on mouseleave
+        $('.CodeMirror-selected').removeClass('selectionLink');
+        $('#hightlightTop').remove();
+        $('#hightlightBottom').remove();
+        if (selection) {
+            activeEditor.setSelection(selection.start, selection.end);    
+        } else {
+            activeEditor.setCursorPos(position);
+        }
+        selection = null;
+        position = null;
     });
-    group.add(anchor);
-    console.log(group);
+    group.add(magnet);
     //allAnchors.push(anchor);
     
 }
 
-function addAnchor(group, x, y, name, delCursor) {
+function addAnchor(group, x, y, name, activeEditor) {
     var stage = group.getStage();
     var layer = group.getLayer();
     var radius = 8;
@@ -161,8 +208,12 @@ function addAnchor(group, x, y, name, delCursor) {
          });
     } else if (name === "topRight") {
         anchor.on('mouseup touchend', function () {
-            addMagnet(group, 40, 40);
-            layer.draw();
+            if(activeEditor.hasSelection()) {
+                var connection = activeEditor.getSelection();
+                addMagnet(group, 40, 40, JSON.stringify(connection));
+                $('.CodeMirror-selected').addClass('selectionLink');
+                layer.draw();
+            }  
         });
     } else {
         anchor.on('mousedown touchstart', function () {
@@ -181,6 +232,9 @@ function addAnchor(group, x, y, name, delCursor) {
         stage.draw();
     });
     anchor.on('mouseout', function () {
+        if (name === "topRight") {
+            $('.CodeMirror-selected').removeClass('selectionLink');
+        }
         document.body.style.cursor = 'default';
         group.get(".image")[0].setStroke("transparent");
         group.setDraggable(true);

@@ -7,18 +7,6 @@ define(function (require, exports, module) {
     var xmlFilename = "sketchmeister.xml";
     var panelSize = 2;
     
-
-    //require('js/jquery-ui-1.10.0.custom.min');
-    //require('js/runmode');
-    require('js/sketch');
-    require('js/json2');
-    require('js/kinetic-v4.3.1');
-    require('js/kinetic-functions');
-
-    var myPanel = $('<div id="myPanel"></div>');
-    var missionControl;
-    var addImageDialog = require("text!html/dialog.html");
-
     var CommandManager = brackets.getModule("command/CommandManager"),
         ProjectManager = brackets.getModule("project/ProjectManager"),
         EditorManager = brackets.getModule("editor/EditorManager"),
@@ -33,6 +21,21 @@ define(function (require, exports, module) {
         Menus = brackets.getModule("command/Menus"),
         KeyBindingManager = brackets.getModule("command/KeyBindingManager"),
         Dialogs = brackets.getModule("widgets/Dialogs");
+    
+    //require('js/jquery-ui-1.10.0.custom.min');
+    //require('js/runmode');
+    require('js/sketch');
+    require('js/json2');
+    require('js/debounce');
+    require('js/kinetic-v4.3.1');
+    require('js/kinetic-functions');
+
+    var myPanel = $('<div id="myPanel"></div>');
+    var missionControl;
+    var addImageDialog = require("text!html/dialog.html");
+
+    var asyncScroll = false;
+    var mouseOverPanel = false;
 
     var _sketchingAreaIdCounter = 0;
     var xmlData, $xml;
@@ -49,7 +52,7 @@ define(function (require, exports, module) {
     var _documentSketchingAreas = [];
     var _activeSketchingArea = null;
     var _activeStage;
-    var _activeLayer = "sketch";
+    var _activeLayer = "image";
     var imageLayer;
     var _codeMirror = null;
     var _projectClosed = false;
@@ -88,7 +91,6 @@ define(function (require, exports, module) {
 
     function moveImageLayerToTop() {
         //Anchor einblenden
-        showAnchors(_activeSketchingArea.stage);
         $('.kineticjs-content').css('z-index', '5');
         $('.simple_sketch').css('z-index', '3');
         _activeLayer = "image";
@@ -96,7 +98,6 @@ define(function (require, exports, module) {
 
     function moveSketchingAreaToTop() {
         //Anchor ausblenden
-        hideAnchors(_activeSketchingArea.stage);
         $('.simple_sketch').css('z-index', '5');
         $('.kineticjs-content').css('z-index', '3');
         _activeLayer = "sketch";
@@ -254,10 +255,10 @@ define(function (require, exports, module) {
                 widthResized = widthOfImage;
                 heightResized = heightOfImage;
             }
-            var visualPos = _activeEditor.getScrollPos();
+            var visualPos = myPanel.scrollTop();
             var imageGroup = new Kinetic.Group({
-                x: visualPos.x + 40,
-                y: visualPos.y + 70,
+                x: 40,
+                y: visualPos + 70,
                 name: 'group',
                 draggable: true
             });
@@ -301,7 +302,7 @@ define(function (require, exports, module) {
             thisImageLayer.add(imageGroup);
 
             addAnchor(imageGroup, 0, 0, 'topLeft');
-            addAnchor(imageGroup, widthResized, 0, 'topRight', delCursor);
+            addAnchor(imageGroup, widthResized, 0, 'topRight', _activeEditor);
             //addDeleteAnchor(imageGroup, widthResized, 0, 'delete');
             addAnchor(imageGroup, widthResized, heightResized, 'bottomRight');
             addAnchor(imageGroup, 0, heightResized, 'bottomLeft');
@@ -328,8 +329,9 @@ define(function (require, exports, module) {
         $('#tools-' + id).append('<div class="seperator">Image</div>');
         $('#tools-' + id).append("<a href='#' class='add-image button'>+</a> ");
         $('#tools-' + id).append("<a href='#' class='image-layer edit'>edit</a> ");
-
-
+        //$('#tools-' + id).append("<a href='#' class='asyncScrolling button'>scroll</a> ");
+        $('#tools-' + id).append("<a href='#' class='sketch-layer button'>sketch</a> ");
+        
         $('#tools-' + id).append('<div class="seperator">Color</div>');
         var colors = {
             'black': '#000000',
@@ -461,13 +463,17 @@ define(function (require, exports, module) {
     }
 
     function _scroll() {
-        var scrollPos = _activeEditor.getScrollPos();
-        $('#myPanel').scrollTop(scrollPos.y);
+        if (!asyncScroll) {
+            var scrollPos = _activeEditor.getScrollPos();
+            $('#myPanel').scrollTop(scrollPos.y);
+        }
     }
     
     function _scrollEditor() {
-        var scrollPos = $('#myPanel').scrollTop();
-        _activeEditor.setScrollPos(_activeEditor.getScrollPos().x, scrollPos);
+        if (!asyncScroll) {
+            var scrollPos = $('#myPanel').scrollTop();
+            _activeEditor.setScrollPos(_activeEditor.getScrollPos().x, scrollPos);
+        }
     }
 
     function currentDocumentChanged() {
@@ -804,6 +810,18 @@ define(function (require, exports, module) {
     
     function _addMyPanel() {
         myPanel.insertAfter($('.content'));
+        /*
+        myPanel.mouseenter(function () {
+            mouseOverPanel = true;
+            asyncScroll = true;
+            $('.asyncScrolling').addClass('selected');
+        });
+        $('#editor-holder').mouseenter(function () {
+            mouseOverPanel = false;
+            asyncScroll = false;
+            $('.asyncScrolling').removeClass('selected');
+        });
+        */
         hideMyPanel();
     }
     
@@ -908,13 +926,13 @@ define(function (require, exports, module) {
         $('body').delegate('.saveSketch', 'click', function () {
             save();
         });
-
+        /*
         $('body').delegate('.overlay .kineticjs-content', 'mousemove mousedown mouseup mouseleave hover', function (e) {
             e.preventDefault();
             _activeEditor.setSelection(_activeEditor.getCursorPos(), _activeEditor.getCursorPos());
             return false;
         });
-        
+        */
         $('body').delegate('.tools .button', 'click', function () {
             var id = _activeSketchingArea.id;
             $('#tools-' + id + ' .button').removeClass('selected');
@@ -935,9 +953,16 @@ define(function (require, exports, module) {
         });
 
         $('body').delegate('.tools .edit', 'click', function () {
-            var id = _activeSketchingArea.id;
-            $('#tools-' + id + ' .color').removeClass('selected');
-            $(this).addClass('selected');
+            if ($(this).hasClass('selected')) {
+                asyncScroll = false;
+                $(this).removeClass('selected');
+                hideAnchors(_activeSketchingArea.stage);
+            } else {
+                asyncScroll = true;
+                $(this).addClass('selected');
+                showAnchors(_activeSketchingArea.stage);
+                $('.tools .sketch-layer').removeClass('selected');
+            }
         });
 
         $('body').delegate('.tools .size', 'click', function () {
@@ -957,9 +982,33 @@ define(function (require, exports, module) {
         $('body').delegate('.image-layer', 'click', function () {
             moveImageLayerToTop();
         });
-        $('body').delegate('.color, .size', 'click', function () {
-            moveSketchingAreaToTop();
+        $('body').delegate('.sketch-layer', 'click', function () {
+            if (_activeLayer === "sketch") {
+                $(this).removeClass('selected');
+                moveImageLayerToTop();
+                var id = _activeSketchingArea.id;
+                $('#tools-' + id + ' .color').removeClass('selected');
+            } else {
+                $('.tools .edit').removeClass('selected');
+                $(this).addClass('selected');
+                hideAnchors(_activeSketchingArea.stage);
+                moveSketchingAreaToTop();
+                asyncScroll = false;
+            }
+            
         });
+        
+        /*$('body').delegate('.asyncScrolling', 'click', function () {
+            // toggle status of asyncScroll
+            if (asyncScroll) {
+                asyncScroll = false;
+                $(this).addClass('selected');
+            } else {
+                asyncScroll = true;
+                $(this).removeClass('selected');
+            }
+        });
+        */
 
     }
      
