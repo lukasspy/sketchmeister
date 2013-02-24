@@ -1,11 +1,42 @@
 /*jslint vars: true, plusplus: true, devel: true, nomen: true, regexp: true, indent: 4, maxerr: 50, browser: true*/
-/*global define, $, brackets, window, CodeMirror, document, Kinetic, addImageToStage, addAnchor, addDeleteAnchor, showAnchors, hideAnchors */
+/*global define, $, brackets, window, CodeMirror, document, Kinetic, addImageToStage, addAnchor, addDeleteAnchor, showAnchors, hideAnchors, addListenersToMagnet */
+
+
+var xmlFilename = "sketchmeister.xml";
+var panelSize = 2;
+
+var myPanel = $('<div id="myPanel"></div>');
+var missionControl;
+
+var asyncScroll = false;
+var mouseOverPanel = false;
+
+var _sketchingAreaIdCounter = 0;
+var xmlData, $xml;
+
+var active = false;
+var firstActivation = true;
+
+var _activeEditor = null;
+var _activeDocument = null;
+var _documentSketchingAreas = [];
+var _activeSketchingArea = null;
+var _activeStage;
+var _activeLayer = "image";
+var imageLayer;
+var _codeMirror = null;
+var _projectClosed = false;
+
+var allPaintingActions = [];
 
 define(function (require, exports, module) {
     "use strict";
 
-    var xmlFilename = "sketchmeister.xml";
-    var panelSize = 2;
+    var addImageDialog = require("text!html/dialog.html");
+    var sketchIconActive = require.toUrl('./img/sketch_button_on.png');
+    var sketchIconDeactive = require.toUrl('./img/sketch_button_off.png');
+    var testImage = require.toUrl('./img/test.png');
+    var delCursor = require.toUrl('./img/cursor-delete.gif');
     
     var CommandManager = brackets.getModule("command/CommandManager"),
         ProjectManager = brackets.getModule("project/ProjectManager"),
@@ -24,40 +55,15 @@ define(function (require, exports, module) {
     
     //require('js/jquery-ui-1.10.0.custom.min');
     //require('js/runmode');
+    
+    var loadCSSPromise = ExtensionUtils.loadStyleSheet(module, 'css/main.css');
+   
+    
     require('js/sketch');
     require('js/json2');
     require('js/debounce');
     require('js/kinetic-v4.3.1');
     require('js/kinetic-functions');
-
-    var myPanel = $('<div id="myPanel"></div>');
-    var missionControl;
-    var addImageDialog = require("text!html/dialog.html");
-
-    var asyncScroll = false;
-    var mouseOverPanel = false;
-
-    var _sketchingAreaIdCounter = 0;
-    var xmlData, $xml;
-    var loadCSSPromise = ExtensionUtils.loadStyleSheet(module, 'css/main.css');
-    var active = false;
-    var firstActivation = true;
-    var sketchIconActive = require.toUrl('./img/sketch_button_on.png');
-    var sketchIconDeactive = require.toUrl('./img/sketch_button_off.png');
-    var testImage = require.toUrl('./img/test.png');
-    var delCursor = require.toUrl('./img/cursor-delete.gif');
-
-    var _activeEditor = null;
-    var _activeDocument = null;
-    var _documentSketchingAreas = [];
-    var _activeSketchingArea = null;
-    var _activeStage;
-    var _activeLayer = "image";
-    var imageLayer;
-    var _codeMirror = null;
-    var _projectClosed = false;
-
-    var allPaintingActions = [];
 
     /*----- xml functions -----*/
 
@@ -127,10 +133,19 @@ define(function (require, exports, module) {
                 $('<img src="' + image.attrs.src + '" id="tempImage" class="visibility: hidden"/>').load(function () {
                     
                     var group = groups[key];
-                    group.get(".topLeft")[0].destroy();
-                    group.get(".topRight")[0].destroy();
-                    group.get(".bottomLeft")[0].destroy();
-                    group.get(".bottomRight")[0].destroy();
+                    group.setDraggable(false);
+                    if (group.get(".topLeft")[0]) {
+                        group.get(".topLeft")[0].destroy();
+                    }
+                    if (group.get(".topRight")[0]) {
+                        group.get(".topRight")[0].destroy();
+                    }
+                    if (group.get(".bottomLeft")[0]) {
+                        group.get(".bottomLeft")[0].destroy();
+                    }
+                    if (group.get(".bottomRight")[0]) {
+                        group.get(".bottomRight")[0].destroy();
+                    }
                     
                     //addDeleteAnchor(group, width, 0, 'delete');
                     //addAnchor(group, width, height, 'bottomRight');
@@ -142,19 +157,28 @@ define(function (require, exports, module) {
                     
                     hideAnchors(stage);
                     
+                    var magnets = group.get(".magnet");
+                    $.each(magnets, function (key, magnet) {
+                        magnet.setDraggable(false);
+                        addListenersToMagnet(magnet, group);
+                    });
                     image.setImage(tempImage);
                     
                     image.on('mouseover', function () {
-                        var layer = this.getLayer();
-                        document.body.style.cursor = "move";
-                        this.setStroke("#EE8900");
-                        layer.draw();
+                        if ($('.tools .edit').hasClass('selected')) {
+                            var layer = this.getLayer();
+                            document.body.style.cursor = "move";
+                            this.setStroke("#EE8900");
+                            layer.draw();
+                        }
                     });
                     image.on('mouseout', function () {
-                        var layer = this.getLayer();
-                        document.body.style.cursor = 'default';
-                        this.setStroke("transparent");
-                        layer.draw();
+                        if ($('.tools .edit').hasClass('selected')) {
+                            var layer = this.getLayer();
+                            document.body.style.cursor = 'default';
+                            this.setStroke("transparent");
+                            layer.draw();
+                        }
                     });
                     
                     $('#tempImage').remove();
@@ -277,16 +301,20 @@ define(function (require, exports, module) {
             });
             
             newImg.on('mouseover', function () {
-                var layer = this.getLayer();
-                document.body.style.cursor = "move";
-                this.setStroke("#EE8900");
-                layer.draw();
+                if ($('.tools .edit').hasClass('selected')) {
+                    var layer = this.getLayer();
+                    document.body.style.cursor = "move";
+                    this.setStroke("#EE8900");
+                    layer.draw();
+                }
             });
             newImg.on('mouseout', function () {
-                var layer = this.getLayer();
-                document.body.style.cursor = 'default';
-                this.setStroke("transparent");
-                layer.draw();
+                if ($('.tools .edit').hasClass('selected')) {
+                    var layer = this.getLayer();
+                    document.body.style.cursor = 'default';
+                    this.setStroke("transparent");
+                    layer.draw();
+                }
             });
             /*
             newImg.on('mouseover', function () {
@@ -302,7 +330,7 @@ define(function (require, exports, module) {
             thisImageLayer.add(imageGroup);
 
             addAnchor(imageGroup, 0, 0, 'topLeft');
-            addAnchor(imageGroup, widthResized, 0, 'topRight', _activeEditor);
+            addAnchor(imageGroup, widthResized, 0, 'topRight');
             //addDeleteAnchor(imageGroup, widthResized, 0, 'delete');
             addAnchor(imageGroup, widthResized, heightResized, 'bottomRight');
             addAnchor(imageGroup, 0, heightResized, 'bottomLeft');
@@ -434,7 +462,8 @@ define(function (require, exports, module) {
         var width = $(_activeEditor.getScrollerElement()).width();
         // breite von myPanel !!!!!! besser ist wohl $("#myPanel").width()
         width = myPanel.width();
-        var totalHeight = _activeEditor.totalHeight();
+        // keine Ahnung warum 30px mehr sein muessen ... im Editor wird immer noch eine letzte Zeile angezeigt, die keine Zeilennummer hat, aber eine Hoehe
+        var totalHeight = _activeEditor.totalHeight() + 30;
 
         $("#myPanel").append('<div class="overlay" id="overlay-' + id + '"><canvas class="simple_sketch" id="simple_sketch-' + id + '" width="' + width + '" height="' + totalHeight + '"></canvas></div>');
 
@@ -474,6 +503,7 @@ define(function (require, exports, module) {
             var scrollPos = $('#myPanel').scrollTop();
             _activeEditor.setScrollPos(_activeEditor.getScrollPos().x, scrollPos);
         }
+        
     }
 
     function currentDocumentChanged() {
@@ -810,6 +840,13 @@ define(function (require, exports, module) {
     
     function _addMyPanel() {
         myPanel.insertAfter($('.content'));
+        myPanel.mouseleave(function () {
+            if (!$('.tools .edit').hasClass('selected')) {
+                myPanel.animate({ scrollTop: _activeEditor.getScrollPos().y }, 700, function () {
+                    asyncScroll = false;
+                });
+            }
+        });
         /*
         myPanel.mouseenter(function () {
             mouseOverPanel = true;
@@ -953,15 +990,41 @@ define(function (require, exports, module) {
         });
 
         $('body').delegate('.tools .edit', 'click', function () {
+            var magnets, groups;
             if ($(this).hasClass('selected')) {
-                asyncScroll = false;
+                //deactivate edit mode
+                _activeLayer = "image";
+                myPanel.animate({ scrollTop: _activeEditor.getScrollPos().y }, 700, function () {
+                    asyncScroll = false;
+                });
                 $(this).removeClass('selected');
                 hideAnchors(_activeSketchingArea.stage);
+                
+                magnets = _activeStage.get(".magnet");
+                $.each(magnets, function (key, magnet) {
+                    magnet.setDraggable(false);
+                });
+                groups = _activeStage.get(".group");
+                $.each(groups, function (key, group) {
+                    group.setDraggable(false);
+                });
             } else {
+                //activate edit mode
+                _activeLayer = "edit";
                 asyncScroll = true;
                 $(this).addClass('selected');
                 showAnchors(_activeSketchingArea.stage);
                 $('.tools .sketch-layer').removeClass('selected');
+                
+                
+                magnets = _activeStage.get(".magnet");
+                $.each(magnets, function (key, magnet) {
+                    magnet.setDraggable(true);
+                });
+                groups = _activeStage.get(".group");
+                $.each(groups, function (key, group) {
+                    group.setDraggable(true);
+                });
             }
         });
 
@@ -974,6 +1037,8 @@ define(function (require, exports, module) {
         $('body').delegate('.add-image', 'click', function () {
             var id = _activeSketchingArea.id;
             NativeFileSystem.showOpenDialog(true, false, "Choose a file...", null, ['png', 'jpg', 'gif', 'jpeg'], function (files) {
+                _activeLayer = "edit";
+                asyncScroll = true;
                 insertFileToImageArea(files);
             }, function (err) {});
             //addImageToStage(testImage);

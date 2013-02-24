@@ -1,10 +1,9 @@
 /*jslint vars: true, plusplus: true, devel: true, nomen: true, regexp: true, indent: 4, maxerr: 50, browser: true*/
-/*global define, $, brackets, window, CodeMirror, document, Kinetic, addImageToStage */
+/*global define, $, brackets, window, CodeMirror, document, Kinetic, addImageToStage, _activeEditor, asyncScroll, _activeLayer */
 
 var sketchIconActive = require.toUrl('./sketch_button_on.png');
 var sketchIconDeactive = require.toUrl('./sketch_button_off.png');
 var allAnchors = new Array();
-var EditorManager = brackets.getModule("editor/EditorManager");
 
 function update(activeAnchor) {
     var group = activeAnchor.getParent();
@@ -36,7 +35,7 @@ function update(activeAnchor) {
         topLeft.setX(anchorX);
         break;
     }
-    
+
     image.setPosition(topLeft.getPosition());
 
     var width = topRight.getX() - topLeft.getX();
@@ -47,8 +46,8 @@ function update(activeAnchor) {
 }
 
 function showAnchors(stage) {
-    if(allAnchors.length) {
-        $.each(allAnchors, function(index, value) {
+    if (allAnchors.length) {
+        $.each(allAnchors, function (index, value) {
             value.show();
         });
         stage.draw();
@@ -56,19 +55,99 @@ function showAnchors(stage) {
 }
 
 function hideAnchors(stage) {
-    if(allAnchors.length) {
-        $.each(allAnchors, function(index, value) {
+    if (allAnchors.length) {
+        $.each(allAnchors, function (index, value) {
             value.hide();
         });
         stage.draw();
     }
 }
 
+function addListenersToMagnet(magnet, group) {
+    var position = null;
+    var selection = null;
+    var clicked = false;
+    var marker = null;
+    var offscreenLocation = null;
+    magnet.on('mousedown', function () {
+        group.setDraggable(false);
+        asyncScroll = true;
+    });
+
+    magnet.on('mouseup', function (e) {
+        var connection = JSON.parse(this.attrs.connection);
+        var lineHeight, pos;
+        if (offscreenLocation === 'top') {
+            lineHeight = _activeEditor._codeMirror.defaultTextHeight();
+            pos = connection.start.line * lineHeight;
+            $(_activeEditor.getScrollerElement()).animate({ scrollTop: pos }, 700);
+            $('#hightlightTop').remove();
+        } else if (offscreenLocation === 'bottom') {
+            lineHeight = _activeEditor._codeMirror.defaultTextHeight();
+            pos = connection.end.line * lineHeight;
+            $(_activeEditor.getScrollerElement()).animate({ scrollTop: pos }, 700);
+            $('#hightlightBottom').remove();
+        }
+    
+        selection = connection;
+        //clicked = true;
+    });
+
+    magnet.on('mouseover', function () {
+        // get the y-scroll position of editor and divide by line-height to get firstVisibleLine
+        var scrollPos = _activeEditor.getScrollPos();
+        var lineHeight = _activeEditor._codeMirror.defaultTextHeight();
+        var firstVisibleLine = Math.ceil(scrollPos.y / lineHeight) - 1;
+        var editorHeight = $(_activeEditor.getScrollerElement()).height();
+        var lastVisibleLine = Math.floor((scrollPos.y + editorHeight) / lineHeight) - 1;
+
+        document.body.style.cursor = "pointer";
+        this.setStrokeWidth(3);
+        group.getLayer().draw();
+        // Save the current selection or position of cursor to restore after mouseleave
+        if (_activeEditor.hasSelection()) {
+            selection = _activeEditor.getSelection();
+        } else {
+            position = _activeEditor.getCursorPos();
+        }
+        var connection = JSON.parse(this.attrs.connection);
+        marker = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLink2'});
+        if (connection.start.line < firstVisibleLine) {
+            $('#editor-holder').append('<div id="hightlightTop"></div>');
+            offscreenLocation = 'top';
+        } else if (connection.end.line > lastVisibleLine) {
+            $('#editor-holder').append('<div id="hightlightBottom"></div>');
+            offscreenLocation = 'bottom';
+        }
+    });
+    magnet.on('dragend', function () {
+        if (_activeLayer === "edit") {
+            group.setDraggable(true);
+            group.getLayer().draw();
+        }
+    });
+    magnet.on('mouseout', function () {
+        if (_activeLayer === "edit") {
+            group.setDraggable(true);
+        }
+        document.body.style.cursor = "default";
+        this.setStrokeWidth(1);
+        this.getLayer().draw();
+        // restore initial selection or position of cursor on mouseleave
+        $('.CodeMirror-selected').removeClass('selectionLink');
+        $('#hightlightTop').remove();
+        $('#hightlightBottom').remove();
+        offscreenLocation = null;
+        marker.clear();
+
+        selection = null;
+        position = null;
+    });
+}
+
 function addMagnet(group, x, y, connection) {
     var stage = group.getStage();
     var layer = group.getLayer();
-    var position = null;
-    var selection = null;
     var magnet = new Kinetic.Circle({
         x: x,
         y: y,
@@ -81,76 +160,22 @@ function addMagnet(group, x, y, connection) {
         dragOnTop: true,
         connection: connection
     });
-    magnet.on('mousedown', function (e) {
-        group.setDraggable(false);
-    });
-    
-    magnet.on('mouseup', function (e) {
-        var activeEditor = EditorManager.getCurrentFullEditor();
-        var connection = JSON.parse(this.attrs.connection);
-        activeEditor.setSelection(connection.start, connection.end, true);
-        $('.CodeMirror-selected').addClass('selectionLink');
-        $('#hightlightTop').remove();
-        $('#hightlightBottom').remove();
-        selection = connection;
-    });
-    
-    magnet.on('mouseover', function () {
-        var activeEditor = EditorManager.getCurrentFullEditor();
-
-        // get the y-scroll position of editor and divide by line-height to get firstVisibleLine
-        var scrollPos = activeEditor.getScrollPos();
-        var lineHeight = $('.CodeMirror').css('line-height').replace('px','');
-        var firstVisibleLine = Math.ceil(scrollPos.y / lineHeight);
-        var editorHeight = $(activeEditor.getScrollerElement()).height();
-        var lastVisibleLine = Math.floor((scrollPos.y + editorHeight) / lineHeight) - 1;
-        
-        document.body.style.cursor = "pointer";
-        this.setStrokeWidth(3);
-        layer.draw();
-        // Save the current selection or position of cursor to restore after mouseleave
-        if(activeEditor.hasSelection()) {
-            selection = activeEditor.getSelection();
-        } else {
-            position = activeEditor.getCursorPos();
-        }
-        var connection = JSON.parse(this.attrs.connection);
-        if(firstVisibleLine < connection.start.line && connection.end.line < lastVisibleLine) {
-            activeEditor.setSelection(connection.start, connection.end, false);
-            $('.CodeMirror-selected').addClass('selectionLink');
-        } else if (connection.start.line < firstVisibleLine) {
-            $('#editor-holder').append('<div id="hightlightTop"></div>');
-        } else if (connection.end.line > lastVisibleLine) {
-            $('#editor-holder').append('<div id="hightlightBottom"></div>');
-        }
-    });
-    magnet.on('dragend', function () {
-        group.setDraggable(true);
-        layer.draw();
-    });
-    magnet.on('mouseout', function () {
-        var activeEditor = EditorManager.getCurrentFullEditor();
-        group.setDraggable(true);
-        this.setStrokeWidth(1);
-        layer.draw();
-        // restore initial selection or position of cursor on mouseleave
-        $('.CodeMirror-selected').removeClass('selectionLink');
-        $('#hightlightTop').remove();
-        $('#hightlightBottom').remove();
-        if (selection) {
-            activeEditor.setSelection(selection.start, selection.end);    
-        } else {
-            activeEditor.setCursorPos(position);
-        }
-        selection = null;
-        position = null;
-    });
     group.add(magnet);
-    //allAnchors.push(anchor);
-    
+    addListenersToMagnet(magnet, group);
+
+    //allAnchors.push(anchor);   
 }
 
-function addAnchor(group, x, y, name, activeEditor) {
+function addMarker(connection) {
+    console.log(_activeEditor._codeMirror.options.gutters);
+    //_activeEditor._codeMirror.addLineClass(connection.start.line, 'text', 'linkedLine');
+    _activeEditor._codeMirror.options.gutters.push('linkedLines');
+    var span = document.createElement('span');
+    span.addClass = 'linkedLine';
+    _activeEditor._codeMirror.setGutterMarker(connection.start.line, 'linkedLines', span);
+}
+
+function addAnchor(group, x, y, name) {
     var stage = group.getStage();
     var layer = group.getLayer();
     var radius = 8;
@@ -158,7 +183,9 @@ function addAnchor(group, x, y, name, activeEditor) {
     var fill = 'transparent';
     var stroke = 'transparent';
     var cursorStyle = "pointer";
-    
+    var deleted = false;
+    var marker = null;
+
     if (name === "topLeft") {
         radius = 8;
         draggable = false;
@@ -190,30 +217,33 @@ function addAnchor(group, x, y, name, activeEditor) {
         name: name,
         draggable: draggable,
         dragOnTop: false
-    }); 
+    });
+    group.add(anchor);
+
     anchor.on('dragmove', function () {
         update(this);
-        layer.draw();
+        this.getLayer.draw();
     });
-    
+
     if (name === "topLeft") {
         anchor.on('mouseup touchend', function () {
             group.setDraggable(false);
-            
             if (confirm("Remove the image!")) {
-                group.removeChildren();
-                group.remove();
+                deleted = true;
+                group.destroy();
                 stage.draw();
             }
-         });
+        });
     } else if (name === "topRight") {
         anchor.on('mouseup touchend', function () {
-            if(activeEditor.hasSelection()) {
-                var connection = activeEditor.getSelection();
+            if (_activeEditor.hasSelection()) {
+                var connection = _activeEditor.getSelection();
                 addMagnet(group, 40, 40, JSON.stringify(connection));
-                $('.CodeMirror-selected').addClass('selectionLink');
+                //addMarker(connection);
+                marker = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLink2'});
+                _activeEditor.setCursorPos(connection.start);
                 layer.draw();
-            }  
+            }
         });
     } else {
         anchor.on('mousedown touchstart', function () {
@@ -231,178 +261,19 @@ function addAnchor(group, x, y, name, activeEditor) {
         group.get(".image")[0].setStroke("#EE8900");
         stage.draw();
     });
-    anchor.on('mouseout', function () {
+    anchor.on('mouseleave', function () {
         if (name === "topRight") {
-            $('.CodeMirror-selected').removeClass('selectionLink');
+            if (marker) {
+                marker.clear();
+            }
         }
         document.body.style.cursor = 'default';
-        group.get(".image")[0].setStroke("transparent");
-        group.setDraggable(true);
+        if (!deleted) {
+            this.parent.get(".image")[0].setStroke("transparent");
+            this.parent.setDraggable(true);
+        }
         stage.draw();
     });
-    group.add(anchor);
+
     allAnchors.push(anchor);
 }
-
-function loadImages(sources, callback) {
-    var images = {};
-    var loadedImages = 0;
-    var numImages = 0;
-    var src;
-    for (src in sources) {
-        numImages++;
-    }
-    for (src in sources) {
-        images[src] = new Image();
-        images[src].onload = function () {
-            if (++loadedImages >= numImages) {
-                callback(images);
-            }
-        };
-        images[src].src = sources[src];
-    }
-}
-
-function createAStage(id) {
-    var height = $(_activeEditor.getScrollerElement()).height();
-    var width = $(_activeEditor.getScrollerElement()).width();
-    var totalHeight = _activeEditor.totalHeight(true);
-    stage = new Kinetic.Stage({
-        container: 'overlay-' + id,
-        width: width,
-        height: totalHeight
-    });
-    console.log('stage done');
-    //stage.setAbsolutePosition(widthOfEditorFull, 0);
-}
-
-function createSketchingLayer(id) {
-    var sketchingLayer = new Kinetic.Layer();
-    sketchingLayer.setId('simple_sketch');
-    sketchingLayer.setAbsolutePosition(0, 0);
-    console.log(sketchingLayer.getId());
-    stage.add(sketchingLayer);
-}
-
-function addImageToStage2(imageToAdd) {
-    var helpImage = new Image();
-    helpImage.src =  imageToAdd;
-    //bild muss erst in den DOM geschrieben werden und dann kann die Größe ermittelt werden .. 
-    var widthOfImage = helpImage.naturalWidth;
-    var heightOfImage = helpImage.naturalHeight;
-    
-    var widthOfEditorFull = $('#overlay-' + _activeSketchingArea.id).width();
-    var widthOfEditor = widthOfEditorFull / 2;
-    var heightOfEditor = $('#overlay-' + _activeSketchingArea.id).height();
-    console.log("Editor: " + widthOfEditor + " and " + heightOfEditor);
-    
-    var imageGroup = new Kinetic.Group({
-        x: 0,
-        y: 0,
-        draggable: true
-    });
-    var layer = new Kinetic.Layer({
-        id: 'images'
-    });
-    layer.add(imageGroup);
-    stage.add(layer);
-    var sketchingLayer = stage.get('#simple_sketch');
-    console.log(sketchingLayer);
-    sketchingLayer.moveToTop();
-    
-    // new Image added to group
-    var newImg = new Kinetic.Image({
-        x: 0,
-        y: 0,
-        image: helpImage,
-        width: (widthOfEditor * 0.8),
-        height: (widthOfEditor * 0.8) / widthOfImage * heightOfImage,
-        name: 'image'
-    });
-
-    imageGroup.add(newImg);
-    addAnchor(imageGroup, 0, 0, 'topLeft');
-    addAnchor(imageGroup, widthOfImage, 0, 'topRight');
-    addAnchor(imageGroup, widthOfImage, heightOfImage, 'bottomRight');
-    addAnchor(imageGroup, 0, heightOfImage, 'bottomLeft');
-
-    imageGroup.on('dragstart', function () {
-        this.moveToTop();
-    });
-    stage.draw();
-}
-
-function initStage(images) {
-    var stage = new Kinetic.Stage({
-        container: 'overlay-' + _activeSketchingArea.id,
-        width: 578,
-        height: 400
-    });
-    var darthVaderGroup = new Kinetic.Group({
-        x: 270,
-        y: 100,
-        draggable: true
-    });
-    var yodaGroup = new Kinetic.Group({
-        x: 100,
-        y: 110,
-        draggable: true
-    });
-    var layer = new Kinetic.Layer();
-
-    /*
-     * go ahead and add the groups
-     * to the layer and the layer to the
-     * stage so that the groups have knowledge
-     * of its layer and stage
-     */
-    layer.add(darthVaderGroup);
-    layer.add(yodaGroup);
-    stage.add(layer);
-
-    // darth vader
-    var darthVaderImg = new Kinetic.Image({
-        x: 0,
-        y: 0,
-        image: images.darthVader,
-        width: 200,
-        height: 138,
-        name: 'image'
-    });
-
-    darthVaderGroup.add(darthVaderImg);
-    addAnchor(darthVaderGroup, 0, 0, 'topLeft');
-    addAnchor(darthVaderGroup, 200, 0, 'topRight');
-    addAnchor(darthVaderGroup, 200, 138, 'bottomRight');
-    addAnchor(darthVaderGroup, 0, 138, 'bottomLeft');
-
-    darthVaderGroup.on('dragstart', function () {
-        this.moveToTop();
-    });
-    // yoda
-    var yodaImg = new Kinetic.Image({
-        x: 0,
-        y: 0,
-        image: images.yoda,
-        width: 93,
-        height: 104,
-        name: 'image'
-    });
-
-    yodaGroup.add(yodaImg);
-    addAnchor(yodaGroup, 0, 0, 'topLeft');
-    addAnchor(yodaGroup, 93, 0, 'topRight');
-    addAnchor(yodaGroup, 93, 104, 'bottomRight');
-    addAnchor(yodaGroup, 0, 104, 'bottomLeft');
-
-    yodaGroup.on('dragstart', function () {
-        this.moveToTop();
-    });
-
-    stage.draw();
-}
-
-var sources = {
-    darthVader: sketchIconActive,
-    yoda: sketchIconDeactive
-};
