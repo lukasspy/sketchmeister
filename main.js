@@ -1,5 +1,5 @@
 /*jslint vars: true, plusplus: true, devel: true, nomen: true, regexp: true, indent: 4, maxerr: 50, browser: true*/
-/*global define, $, brackets, window, CodeMirror, document, Kinetic, addImageToStage, addAnchor, addDeleteAnchor, showAnchors, hideAnchors, addListenersToMagnet */
+/*global define, $, brackets, window, CodeMirror, document, Kinetic, addImageToStage, addAnchor, addDeleteAnchor, showAnchors, hideAnchors, addListenersToMagnet, addMarker, removeMarker, pulse, recalculateStartAndEndOfConnection */
 
 
 var xmlFilename = "sketchmeister.xml";
@@ -26,7 +26,7 @@ var _activeLayer = "image";
 var imageLayer;
 var _codeMirror = null;
 var _projectClosed = false;
-
+var _activeMarker = [];
 var allPaintingActions = [];
 
 define(function (require, exports, module) {
@@ -37,6 +37,10 @@ define(function (require, exports, module) {
     var sketchIconDeactive = require.toUrl('./img/sketch_button_off.png');
     var testImage = require.toUrl('./img/test.png');
     var delCursor = require.toUrl('./img/cursor-delete.gif');
+    
+    var deleteIcon = require.toUrl('./img/delete.png');
+    var addIcon = require.toUrl('./img/add.png');
+
     
     var CommandManager = brackets.getModule("command/CommandManager"),
         ProjectManager = brackets.getModule("project/ProjectManager"),
@@ -99,6 +103,7 @@ define(function (require, exports, module) {
         //Anchor einblenden
         $('.kineticjs-content').css('z-index', '5');
         $('.simple_sketch').css('z-index', '3');
+        $('.sketching-tools').hide();
         _activeLayer = "image";
     }
 
@@ -106,6 +111,7 @@ define(function (require, exports, module) {
         //Anchor ausblenden
         $('.simple_sketch').css('z-index', '5');
         $('.kineticjs-content').css('z-index', '3');
+        $('.sketching-tools').show();
         _activeLayer = "sketch";
     }
 
@@ -150,7 +156,7 @@ define(function (require, exports, module) {
                     //addDeleteAnchor(group, width, 0, 'delete');
                     //addAnchor(group, width, height, 'bottomRight');
                     
-                    addAnchor(group, 0, 0, 'topLeft');
+                    addAnchor(group, 0, 0, 'topLeft', deleteIcon);
                     addAnchor(group, width, 0, 'topRight');
                     addAnchor(group, width, height, 'bottomRight');
                     addAnchor(group, 0, height, 'bottomLeft');
@@ -160,6 +166,8 @@ define(function (require, exports, module) {
                     var magnets = group.get(".magnet");
                     $.each(magnets, function (key, magnet) {
                         magnet.setDraggable(false);
+                        //console.log(magnet._id);
+                        addMarker(JSON.parse(magnet.attrs.connection), magnet._id);
                         addListenersToMagnet(magnet, group);
                     });
                     image.setImage(tempImage);
@@ -273,8 +281,8 @@ define(function (require, exports, module) {
             heightOfImage = tempImage.height;
 
             moveImageLayerToTop();
-            var widthResized = (_activeSketchingArea.width * 0.7);
-            var heightResized = (_activeSketchingArea.width * 0.7) / widthOfImage * heightOfImage;
+            var widthResized = (myPanel.width() * 0.7);
+            var heightResized = (myPanel.width() * 0.7) / widthOfImage * heightOfImage;
             if (widthResized > widthOfImage) {
                 widthResized = widthOfImage;
                 heightResized = heightOfImage;
@@ -350,17 +358,20 @@ define(function (require, exports, module) {
 
     function _addSketchingTools(id) {
         myPanel.append('<div class="tools" id="tools-' + id + '" style="height: ' + $(_activeEditor.getScrollerElement()).height() + 'px"></div>');
+        
         $('#tools-' + id).append('<div class="seperator"></div>');
-        $('#tools-' + id).append('<a href="#simple_sketch-' + id + '" data-undo="1" class="undo"></a>');
-        $('#tools-' + id).append("<a href='#simple_sketch-" + id + "' data-clear='1' class='button'>clear</a> ");
-
-        $('#tools-' + id).append('<div class="seperator">Image</div>');
         $('#tools-' + id).append("<a href='#' class='add-image button'>+</a> ");
         $('#tools-' + id).append("<a href='#' class='image-layer edit'>edit</a> ");
         //$('#tools-' + id).append("<a href='#' class='asyncScrolling button'>scroll</a> ");
         $('#tools-' + id).append("<a href='#' class='sketch-layer button'>sketch</a> ");
         
-        $('#tools-' + id).append('<div class="seperator">Color</div>');
+        var sketchingTools = $('<div class="sketching-tools"></div>');
+        sketchingTools.append('<div class="seperator"></div>');
+        sketchingTools.append('<a href="#simple_sketch-' + id + '" data-undo="1" class="undo"></a>');
+        sketchingTools.append("<a href='#simple_sketch-" + id + "' data-clear='1' class='button'>clear</a> ");
+
+        
+        sketchingTools.append('<div class="seperator">Color</div>');
         var colors = {
             'black': '#000000',
             'grey': '#B2ADA1',
@@ -371,13 +382,13 @@ define(function (require, exports, module) {
         };
         $.each(colors, function (key, value) {
             if (key === "black") {
-                $('#tools-' + id).append("<a class='color " + key + " selected' href='#simple_sketch-" + id + "' data-tool='marker' data-color='" + value + "' style='background: " + value + ";'></a> ");
+                sketchingTools.append("<a class='color " + key + " selected' href='#simple_sketch-" + id + "' data-tool='marker' data-color='" + value + "' style='background: " + value + ";'></a> ");
             } else {
-                $('#tools-' + id).append("<a class='color " + key + "' href='#simple_sketch-" + id + "' data-tool='marker' data-color='" + value + "' style='background: " + value + ";'></a> ");
+                sketchingTools.append("<a class='color " + key + "' href='#simple_sketch-" + id + "' data-tool='marker' data-color='" + value + "' style='background: " + value + ";'></a> ");
             }
         });
-        $('#tools-' + id).append('<a class="eraser" href="#simple_sketch-' + id + '" data-tool="eraser"></a>');
-        $('#tools-' + id).append('<div class="seperator">Size</div>');
+        sketchingTools.append('<a class="eraser" href="#simple_sketch-' + id + '" data-tool="eraser"></a>');
+        sketchingTools.append('<div class="seperator">Size</div>');
         var sizes = {
             'small': 5,
             'medium': 10,
@@ -385,12 +396,13 @@ define(function (require, exports, module) {
         };
         $.each(sizes, function (key, value) {
             if (key === "small") {
-                $('#tools-' + id).append("<a class='size " + key + " selected' href='#simple_sketch-" + id + "' data-size='" + (value - 3) + "'>" + value + "</a> ");
+                sketchingTools.append("<a class='size " + key + " selected' href='#simple_sketch-" + id + "' data-size='" + (value - 3) + "'>" + value + "</a> ");
 
             } else {
-                $('#tools-' + id).append("<a class='size " + key + "' href='#simple_sketch-" + id + "' data-size='" + (value - 3) + "'>" + value + "</a> ");
+                sketchingTools.append("<a class='size " + key + "' href='#simple_sketch-" + id + "' data-size='" + (value - 3) + "'>" + value + "</a> ");
             }
         });
+        $('#tools-' + id).append(sketchingTools);
     }
 
     function _addToolbarIcon(id) {
@@ -462,6 +474,8 @@ define(function (require, exports, module) {
         var width = $(_activeEditor.getScrollerElement()).width();
         // breite von myPanel !!!!!! besser ist wohl $("#myPanel").width()
         width = myPanel.width();
+        // feste Breite ... entscheidung für Nutzer getroffen ... 1500px
+        //width = "1500";
         // keine Ahnung warum 30px mehr sein muessen ... im Editor wird immer noch eine letzte Zeile angezeigt, die keine Zeilennummer hat, aber eine Hoehe
         var totalHeight = _activeEditor.totalHeight() + 30;
 
@@ -471,7 +485,7 @@ define(function (require, exports, module) {
         var sketchArea = $('#simple_sketch-' + id).sketch();
 
         _addSketchingTools(id);
-        var stage = createStage('overlay-' + id, width, totalHeight, path, filename);
+        var stage = createStage('overlay-' + id, myPanel.width(), totalHeight, path, filename);
         var sketchingArea = {
             'filename': filename,
             'fullPath': path,
@@ -505,10 +519,72 @@ define(function (require, exports, module) {
         }
         
     }
+    
+    function whereIsThePointInRelationToTwoOtherPoints(point, from, to) {
+        // -1 before < 0 inside < 1 after
+        
+        if (to < point) {
+            return 1; //after
+        } else if (point < from) {
+            return -1; //before
+        } else {
+            return 0; //inside
+        }
+    }
 
     function currentDocumentChanged() {
         // set the current Full Editor as _activeEditor
         _activeEditor = EditorManager.getCurrentFullEditor();
+        _activeEditor._codeMirror.on("gutterClick", function (cm, n) {
+            var lineInfo = cm.lineInfo(n);
+            if (lineInfo.gutterMarkers) {
+                
+                $.each(lineInfo.gutterMarkers, function (key, value) {
+                    //console.log(_activeStage);
+                    var magnets = _activeStage.get(".magnet");
+                    $.each(magnets, function (pos, magnet) {
+                        if (magnet._id === value.name) {
+                            if (_activeMarker[magnet._id]) {
+                                // mark in text is set, so lets clear and delete the mark-reference
+                                _activeMarker[magnet._id].clear();
+                                delete (_activeMarker[magnet._id]);
+                            } else {
+                                // no mark in text, so lets get the magnet and mark corresponding text
+                                //console.log(magnet);
+                                pulse(magnet);
+                                var connection = JSON.parse(magnet.attrs.connection);
+                                //console.log(connection);
+                                var marker = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLink2'});
+                                _activeMarker[magnet._id] = marker;
+                            }
+                        }
+                    });
+                });
+                
+            } else {
+                console.log("keine markierung");
+            }
+            //console.log($('.CodeMirror-linkedLines'));
+            //console.log(cm.lineInfo(n).gutterMarkers);
+        });
+        
+        _activeEditor._codeMirror.on("change", function (cm, change) {
+            var magnets = _activeStage.get(".magnet");
+            console.log(change);
+            $.each(magnets, function (pos, magnet) {
+                var reCalculatedConnection = recalculateStartAndEndOfConnection(magnet, cm, change);
+                if (reCalculatedConnection) {
+                    magnet.attrs.connection = reCalculatedConnection;
+                } else {
+                    magnet.destroy();
+                    _activeStage.draw();
+                }
+            });
+            
+        });
+        
+        var gutter = _activeEditor._codeMirror.getWrapperElement().getElementsByClassName("CodeMirror-gutter")[0];
+
         // if _activeEditor gets scrolled then also scroll the sketching overlay
         $(_activeEditor).on("scroll", _scroll);
                 
@@ -898,16 +974,18 @@ define(function (require, exports, module) {
         $(window).resize(function () {
             if (active) {
                 setSizeOfMyPanel(panelSize);
-                /*
-                $.each(_documentSketchingAreas, function (key, sketchingArea) {
-                    sketchingArea.width = myPanel.width();
-                    sketchingArea.height = myPanel.height();
-                    sketchingArea.stage.setWidth(myPanel.width());
-                    sketchingArea.stage.setHeight(myPanel.height());
-                });
-                $(".overlay").width(myPanel.width());
-                $(".overlay").height(myPanel.height());
-                */
+                $('.tools').css('height', $(_activeEditor.getScrollerElement()).height());
+                
+                //$.each(_documentSketchingAreas, function (key, sketchingArea) {
+                    //$('#simple_sketch-' + sketchingArea.id).css('width', myPanel.width());
+                    //sketchingArea.width = myPanel.width();
+                    //sketchingArea.height = myPanel.height();
+                    //sketchingArea.stage.setWidth(myPanel.width());
+                    //sketchingArea.stage.setHeight(myPanel.height());
+                //});
+                //$(".overlay").width(myPanel.width());
+                //$(".overlay").height(myPanel.height());
+                
             } else {
                 setSizeOfMyPanel(0);
             }
@@ -928,7 +1006,15 @@ define(function (require, exports, module) {
             saveSketchesAndImagesOfAllAreas();
             writeXmlDataToFile();
         });
-
+        
+        $('.CodeMirror-linenumbers1').click(function () {
+            //console.log($(this).text());
+            var lineClass = $(this).next().children('.CodeMaster-linkedLines')[0].attr('class');
+            alert(lineClass);
+            lineClass.replace('magnet-', '').replace('CodeMaster-linkedLines', '');
+            //console.log(lineClass);
+        });
+        
         $('#toggle-sketching').click(function () {
             _toggleStatus();
         });
