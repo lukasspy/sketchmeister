@@ -1,7 +1,6 @@
 /*jslint vars: true, plusplus: true, devel: true, nomen: true, regexp: true, indent: 4, maxerr: 50, browser: true*/
 /*global define, $, brackets, window, CodeMirror, document, Kinetic, addImageToStage, addAnchor, addDeleteAnchor, showAnchors, hideAnchors, addListenersToMagnet, addMarker, removeMarker, pulse, recalculateStartAndEndOfConnection */
 
-
 var xmlFilename = "sketchmeister.xml";
 var panelSize = 2;
 
@@ -29,6 +28,7 @@ var _projectClosed = false;
 var _activeMarker = [];
 var allPaintingActions = [];
 
+
 define(function (require, exports, module) {
     "use strict";
 
@@ -38,12 +38,13 @@ define(function (require, exports, module) {
     var testImage = require.toUrl('./img/test.png');
     var delCursor = require.toUrl('./img/cursor-delete.gif');
     
-    var deleteIcon = require.toUrl('./img/delete.png');
-    var addIcon = require.toUrl('./img/add.png');
+    var deleteIcon = require.toUrl('./img/delete-button.png');
+    var addIcon = require.toUrl('./img/add-button.png');
 
     
     var CommandManager = brackets.getModule("command/CommandManager"),
         ProjectManager = brackets.getModule("project/ProjectManager"),
+        //EditorUtils = brackets.getModule("editor/EditorUtils"),
         EditorManager = brackets.getModule("editor/EditorManager"),
         ExtensionUtils = brackets.getModule("utils/ExtensionUtils"),
         Editor = brackets.getModule("editor/Editor").Editor,
@@ -52,7 +53,6 @@ define(function (require, exports, module) {
         FileUtils = brackets.getModule("file/FileUtils"),
         AppInit = brackets.getModule("utils/AppInit"),
         Resizer = brackets.getModule("utils/Resizer"),
-        EditorUtils = brackets.getModule("editor/EditorUtils"),
         Menus = brackets.getModule("command/Menus"),
         KeyBindingManager = brackets.getModule("command/KeyBindingManager"),
         Dialogs = brackets.getModule("widgets/Dialogs");
@@ -155,9 +155,8 @@ define(function (require, exports, module) {
                     
                     //addDeleteAnchor(group, width, 0, 'delete');
                     //addAnchor(group, width, height, 'bottomRight');
-                    
                     addAnchor(group, 0, 0, 'topLeft', deleteIcon);
-                    addAnchor(group, width, 0, 'topRight');
+                    addAnchor(group, width, 0, 'topRight', addIcon);
                     addAnchor(group, width, height, 'bottomRight');
                     addAnchor(group, 0, height, 'bottomLeft');
                     
@@ -337,8 +336,8 @@ define(function (require, exports, module) {
             var thisImageLayer = _activeSketchingArea.stage.getChildren()[0];
             thisImageLayer.add(imageGroup);
 
-            addAnchor(imageGroup, 0, 0, 'topLeft');
-            addAnchor(imageGroup, widthResized, 0, 'topRight');
+            addAnchor(imageGroup, 0, 0, 'topLeft', deleteIcon);
+            addAnchor(imageGroup, widthResized, 0, 'topRight', addIcon);
             //addDeleteAnchor(imageGroup, widthResized, 0, 'delete');
             addAnchor(imageGroup, widthResized, heightResized, 'bottomRight');
             addAnchor(imageGroup, 0, heightResized, 'bottomLeft');
@@ -504,20 +503,28 @@ define(function (require, exports, module) {
         var length = _documentSketchingAreas.push(sketchingArea);
         return length - 1;
     }
-
+    var ignoreScrollEventsFromPanel = false;
     function _scroll() {
         if (!asyncScroll) {
             var scrollPos = _activeEditor.getScrollPos();
-            $('#myPanel').scrollTop(scrollPos.y);
+            ignoreScrollEventsFromPanel = true;
+            if ($('#myPanel').scrollTop() !== scrollPos.y) {
+                $('#myPanel').scrollTop(scrollPos.y);
+            }
         }
     }
     
     function _scrollEditor() {
+        var ignore = ignoreScrollEventsFromPanel;
+        ignoreScrollEventsFromPanel = false;
+        if (ignore) {
+            return false;
+        }
         if (!asyncScroll) {
             var scrollPos = $('#myPanel').scrollTop();
             _activeEditor.setScrollPos(_activeEditor.getScrollPos().x, scrollPos);
         }
-        
+       
     }
     
     function whereIsThePointInRelationToTwoOtherPoints(point, from, to) {
@@ -533,55 +540,10 @@ define(function (require, exports, module) {
     }
 
     function currentDocumentChanged() {
+        //getCurrentDocument..
         // set the current Full Editor as _activeEditor
         _activeEditor = EditorManager.getCurrentFullEditor();
-        _activeEditor._codeMirror.on("gutterClick", function (cm, n) {
-            var lineInfo = cm.lineInfo(n);
-            if (lineInfo.gutterMarkers) {
-                
-                $.each(lineInfo.gutterMarkers, function (key, value) {
-                    //console.log(_activeStage);
-                    var magnets = _activeStage.get(".magnet");
-                    $.each(magnets, function (pos, magnet) {
-                        if (magnet._id === value.name) {
-                            if (_activeMarker[magnet._id]) {
-                                // mark in text is set, so lets clear and delete the mark-reference
-                                _activeMarker[magnet._id].clear();
-                                delete (_activeMarker[magnet._id]);
-                            } else {
-                                // no mark in text, so lets get the magnet and mark corresponding text
-                                //console.log(magnet);
-                                pulse(magnet);
-                                var connection = JSON.parse(magnet.attrs.connection);
-                                //console.log(connection);
-                                var marker = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLink2'});
-                                _activeMarker[magnet._id] = marker;
-                            }
-                        }
-                    });
-                });
-                
-            } else {
-                console.log("keine markierung");
-            }
-            //console.log($('.CodeMirror-linkedLines'));
-            //console.log(cm.lineInfo(n).gutterMarkers);
-        });
-        
-        _activeEditor._codeMirror.on("change", function (cm, change) {
-            var magnets = _activeStage.get(".magnet");
-            console.log(change);
-            $.each(magnets, function (pos, magnet) {
-                var reCalculatedConnection = recalculateStartAndEndOfConnection(magnet, cm, change);
-                if (reCalculatedConnection) {
-                    magnet.attrs.connection = reCalculatedConnection;
-                } else {
-                    magnet.destroy();
-                    _activeStage.draw();
-                }
-            });
-            
-        });
+    
         
         var gutter = _activeEditor._codeMirror.getWrapperElement().getElementsByClassName("CodeMirror-gutter")[0];
 
@@ -624,10 +586,11 @@ define(function (require, exports, module) {
         }
         // set the active stage by referencing the stage of the active sketchingArea
         _activeStage = _activeSketchingArea.stage;
-
+        _activeSketchingArea.sketchArea.redraw();
         if (active) {
             $('#overlay-' + _activeSketchingArea.id).show();
         }
+
     }
 
     function deleteSketchingArea(id) {
@@ -923,6 +886,8 @@ define(function (require, exports, module) {
                 });
             }
         });
+        //Resizer.makeResizable(myPanel, 'horz', 'LEFT', '200', false, true);
+        //Resizer.hide(myPanel);
         /*
         myPanel.mouseenter(function () {
             mouseOverPanel = true;
@@ -951,7 +916,7 @@ define(function (require, exports, module) {
             _activeSketchingArea.sketchArea.redraw();
             showMyPanel();
         }
-        //Resizer.toggle(myPanel);
+        Resizer.toggle(myPanel);
     }
 
     function _addHandlers() {
@@ -960,6 +925,53 @@ define(function (require, exports, module) {
             if (active) {
                 saveAll();
             }
+        });
+        
+        EditorManager.getCurrentFullEditor()._codeMirror.on("gutterClick", function (cm, n) {
+            var lineInfo = cm.lineInfo(n);
+            if (lineInfo.gutterMarkers) {
+                
+                $.each(lineInfo.gutterMarkers, function (key, value) {
+                    //console.log(_activeStage);
+                    var magnets = _activeStage.get(".magnet");
+                    $.each(magnets, function (pos, magnet) {
+                        if (magnet._id === value.name) {
+                            if (_activeMarker[magnet._id]) {
+                                // mark in text is set, so lets clear and delete the mark-reference
+                                _activeMarker[magnet._id].clear();
+                                delete (_activeMarker[magnet._id]);
+                            } else {
+                                // no mark in text, so lets get the magnet and mark corresponding text
+                                //console.log(magnet);
+                                pulse(magnet);
+                                var connection = JSON.parse(magnet.attrs.connection);
+                                //console.log(connection);
+                                var marker = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLink2'});
+                                _activeMarker[magnet._id] = marker;
+                            }
+                        }
+                    });
+                });
+                
+            } else {
+                console.log("keine markierung");
+            }
+            //console.log($('.CodeMirror-linkedLines'));
+            //console.log(cm.lineInfo(n).gutterMarkers);
+        });
+        
+        EditorManager.getCurrentFullEditor()._codeMirror.on("change", function (cm, change) {
+            var magnets = _activeStage.get(".magnet");
+            $.each(magnets, function (pos, magnet) {
+                var reCalculatedConnection = recalculateStartAndEndOfConnection(magnet, cm, change);
+                if (reCalculatedConnection) {
+                    magnet.attrs.connection = reCalculatedConnection;
+                } else {
+                    magnet.destroy();
+                    _activeStage.draw();
+                }
+            });
+            
         });
         
         $(ProjectManager).on("projectOpen", function () {
@@ -1187,6 +1199,11 @@ define(function (require, exports, module) {
             _addToolbarIcon();
             _addHandlers();
             _addMyPanel();
+            
+            //initialization ... make stuff and hide everthing
+            _toggleStatus();
+            _toggleStatus();
+            
             missionControl = new MissionControl();
             missionControl.init();
         });

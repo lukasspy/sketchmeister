@@ -10,7 +10,10 @@
     width: 40px;
     height: 15px;
     background: rgba(251,167,13,0.3);
+    cursor: pointer;
+
 }
+
 
 #hightlightTop {
     position: absolute;

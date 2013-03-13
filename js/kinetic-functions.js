@@ -332,19 +332,37 @@ function addAnchor(group, x, y, name, icon) {
         draggable = false;
         fill = '#8DA56D';
         stroke = '#376568';
-        cursorStyle = 'crosshair';
+        cursorStyle = 'pointer';
     }
-    var anchor = new Kinetic.Circle({
-        x: x,
-        y: y,
-        stroke: stroke,
-        fill: fill,
-        strokeWidth: 1,
-        radius: radius,
-        name: name,
-        draggable: draggable,
-        dragOnTop: false
-    });
+    var anchor;
+    if (name === "topLeft" || name === "topRight") {
+        
+        var imageObj = new Image();
+        imageObj.src = icon;
+        anchor = new Kinetic.Image({
+            x: x,
+            y: y,
+            offset: [15, 15],
+            image: imageObj,
+            width: 30,
+            height: 30,
+            name: name,
+            draggable: draggable,
+            dragOnTop: false
+        });
+    } else {
+        anchor = new Kinetic.Circle({
+            x: x,
+            y: y,
+            stroke: stroke,
+            fill: fill,
+            strokeWidth: 1,
+            radius: radius,
+            name: name,
+            draggable: draggable,
+            dragOnTop: false
+        });
+    }
     group.add(anchor);
 
     anchor.on('dragmove', function () {
@@ -471,11 +489,12 @@ function recalculateStartAndEndOfConnection(magnet, cm, change) {
                         // just change the startpoint
                         connection.start = change.from;
                     } else {
-                        connection.start.line = connection.start.line - lineDiff;
+                        // start is also after 
                         if (change.to.line === connection.start.line) {
                             //need to correct the ch-value
                             connection.start.ch = change.from.ch + connection.start.ch - change.to.ch;
                         }
+                        connection.start.line = connection.start.line - lineDiff;
                     }
                 }
             }
