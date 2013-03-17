@@ -1,9 +1,9 @@
 .selectionLink2 {
-    background: rgba(251,167,13,0.3)!important;
+    background: rgba(251,167,13,0.3);
 }
 
 .selectionLink {
-    background: rgba(0,167,13,0.3)!important;
+    background: rgba(116, 138, 0, 0.3)!important;
 }
 
 .CodeMirror-linkedLines {
@@ -11,9 +11,7 @@
     height: 15px;
     background: rgba(251,167,13,0.3);
     cursor: pointer;
-
 }
-
 
 #hightlightTop {
     position: absolute;

@@ -1,5 +1,5 @@
 /*jslint vars: true, plusplus: true, devel: true, nomen: true, regexp: true, indent: 4, maxerr: 50, browser: true*/
-/*global define, $, brackets, window, CodeMirror, document, Kinetic, addImageToStage, addAnchor, addDeleteAnchor, showAnchors, hideAnchors, addListenersToMagnet, addMarker, removeMarker, pulse, recalculateStartAndEndOfConnection */
+/*global define, $, brackets, window, CodeMirror, document, Kinetic, addImageToStage, addAnchor, addDeleteAnchor, showAnchors, hideAnchors, addListenersToMagnet, addMarker, removeMarker, highlight, unhighlight, recalculateStartAndEndOfConnection */
 
 var xmlFilename = "sketchmeister.xml";
 var panelSize = 2;
@@ -25,7 +25,7 @@ var _activeLayer = "image";
 var imageLayer;
 var _codeMirror = null;
 var _projectClosed = false;
-var _activeMarker = [];
+var activeMarker = [];
 var allPaintingActions = [];
 
 
@@ -234,8 +234,8 @@ define(function (require, exports, module) {
                     //addDeleteAnchor(group, width, 0, 'delete');
                     //addAnchor(group, width, height, 'bottomRight');
                     
-                    addAnchor(group, 0, 0, 'topLeft');
-                    addAnchor(group, width, 0, 'topRight');
+                    addAnchor(group, 0, 0, 'topLeft', deleteIcon);
+                    addAnchor(group, width, 0, 'topRight', addIcon);
                     addAnchor(group, width, height, 'bottomRight');
                     addAnchor(group, 0, height, 'bottomLeft');
                     
@@ -504,8 +504,15 @@ define(function (require, exports, module) {
         return length - 1;
     }
     var ignoreScrollEventsFromPanel = false;
+    var ignoreScrollEventsFromEditor = false;
+    
     function _scroll() {
-        if (!asyncScroll) {
+        var ignore = ignoreScrollEventsFromEditor;
+        ignoreScrollEventsFromEditor = false;
+        if (ignore) {
+            console.log("ignoring Panel scroll");
+            return false;
+        } else if (!asyncScroll) {
             var scrollPos = _activeEditor.getScrollPos();
             ignoreScrollEventsFromPanel = true;
             if ($('#myPanel').scrollTop() !== scrollPos.y) {
@@ -518,13 +525,15 @@ define(function (require, exports, module) {
         var ignore = ignoreScrollEventsFromPanel;
         ignoreScrollEventsFromPanel = false;
         if (ignore) {
+            console.log("ignoring Editor scroll");
             return false;
-        }
-        if (!asyncScroll) {
+        } else if (!asyncScroll) {
             var scrollPos = $('#myPanel').scrollTop();
-            _activeEditor.setScrollPos(_activeEditor.getScrollPos().x, scrollPos);
+            ignoreScrollEventsFromEditor = true;
+            if (_activeEditor.getScrollPos().y !== scrollPos) {
+                _activeEditor.setScrollPos(_activeEditor.getScrollPos().x, scrollPos);
+            }
         }
-       
     }
     
     function whereIsThePointInRelationToTwoOtherPoints(point, from, to) {
@@ -543,14 +552,14 @@ define(function (require, exports, module) {
         //getCurrentDocument..
         // set the current Full Editor as _activeEditor
         _activeEditor = EditorManager.getCurrentFullEditor();
-    
+        
         
         var gutter = _activeEditor._codeMirror.getWrapperElement().getElementsByClassName("CodeMirror-gutter")[0];
 
         // if _activeEditor gets scrolled then also scroll the sketching overlay
         $(_activeEditor).on("scroll", _scroll);
-                
         myPanel.on("scroll", _scrollEditor);
+        
         // set the current Document as _activeDocument to get additional data of the file
         _activeDocument = DocumentManager.getCurrentDocument();
         var _activeFullPath = DocumentManager.getCurrentDocument().file.fullPath;
@@ -566,6 +575,11 @@ define(function (require, exports, module) {
                 foundSketchingArea = key;
             }
         });
+        
+        // scroll to same position as currentEditor, since the position in the editor gets stored. Otherwise not synced before first scroll
+        
+        
+        
         // if sketchingArea is already loaded set it as active, else create a new sketchingArea and add it to Array of sketchingAreas
         if (foundSketchingArea !== -1) {
             // sketchingArea was found and it is set
@@ -590,6 +604,9 @@ define(function (require, exports, module) {
         if (active) {
             $('#overlay-' + _activeSketchingArea.id).show();
         }
+        
+        //when document is changed the editor position was stored, so the panel needs to be synced on reentering
+        myPanel.scrollTop(_activeEditor.getScrollPos().y);
 
     }
 
@@ -875,6 +892,7 @@ define(function (require, exports, module) {
     function showMyPanel() {
         $('#editor-holder').css('margin-right', myPanel.width());
         myPanel.show();
+        myPanel.scrollTop(_activeEditor.getScrollPos().y);
     }
     
     function _addMyPanel() {
@@ -911,6 +929,7 @@ define(function (require, exports, module) {
         } else {
             setSizeOfMyPanel(panelSize);
             _activate();
+            
             currentDocumentChanged();
             myPanel.find("canvas").width(myPanel.width());
             _activeSketchingArea.sketchArea.redraw();
@@ -936,18 +955,31 @@ define(function (require, exports, module) {
                     var magnets = _activeStage.get(".magnet");
                     $.each(magnets, function (pos, magnet) {
                         if (magnet._id === value.name) {
-                            if (_activeMarker[magnet._id]) {
+                            if (magnet.clicked) {
                                 // mark in text is set, so lets clear and delete the mark-reference
-                                _activeMarker[magnet._id].clear();
-                                delete (_activeMarker[magnet._id]);
+                                unhighlight(magnet);
+                                magnet.clicked = false;
+                                activeMarker[magnet._id].clear();
+                                $(".magnet-" + magnet._id).removeClass('selectionLink');
+                                delete (activeMarker[magnet._id]);
                             } else {
                                 // no mark in text, so lets get the magnet and mark corresponding text
                                 //console.log(magnet);
-                                pulse(magnet);
-                                var connection = JSON.parse(magnet.attrs.connection);
-                                //console.log(connection);
-                                var marker = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLink2'});
-                                _activeMarker[magnet._id] = marker;
+                                var timeout = 0;
+                                if (!active) {
+                                    _toggleStatus();
+                                    //set the timeout: if panel has not been opened yet it takes a little time and then the animation would be missed
+                                    timeout = 100;
+                                }
+                                setTimeout(function () {
+                                    highlight(magnet);
+                                    magnet.clicked = true;
+                                    $(".magnet-" + magnet._id).addClass("selectionLink");
+                                    var connection = JSON.parse(magnet.attrs.connection);
+                                    //console.log(connection);
+                                    activeMarker[magnet._id] = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLink'});
+                                   
+                                }, timeout);
                             }
                         }
                     });

@@ -1,11 +1,13 @@
 /*jslint vars: true, plusplus: true, devel: true, nomen: true, regexp: true, indent: 4, maxerr: 50, browser: true*/
-/*global define, $, brackets, window, CodeMirror, document, Kinetic, addImageToStage, _activeEditor, asyncScroll, _activeLayer */
+/*global define, $, brackets, window, CodeMirror, document, Kinetic, addImageToStage, _activeEditor, asyncScroll, _activeLayer, activeMarker*/
 
 var sketchIconActive = require.toUrl('./sketch_button_on.png');
 var sketchIconDeactive = require.toUrl('./sketch_button_off.png');
 var allAnchors = [];
 var colors = ['#15863C', '#6AC7F3', '#639A4B', '#BE6FBE', '#FBEC44', '#F8B015', '#F0ADA9', '#AA4F17', '#FE6208', '#495CC9', '#F01F1C'];
 var _activeColor = 0;
+
+activeHoverMarker = [];
 
 function update(activeAnchor) {
     var group = activeAnchor.getParent();
@@ -101,7 +103,6 @@ function hideMagnets(group) {
 }
 
 function addMarker(connection, id) {
-    
     //_activeEditor._codeMirror.addLineClass(connection.start.line, 'text', 'linkedLine');
     _activeEditor._codeMirror.options.gutters.push("magnet-" + id);
     var lines = connection.end.line - connection.start.line;
@@ -118,65 +119,35 @@ function addMarker(connection, id) {
 }
 
 function removeMarker(connection, id) {
-    //var lines = connection.end.line - connection.start.line;
-    //var i;
     _activeEditor._codeMirror.clearGutter("magnet-" + id);
-    /*
-    for (i = 0; i <= lines; i++) {
-        var line = connection.start.line + i;
-        _activeEditor._codeMirror.setGutterMarker(line, 'CodeMirror-linkedLines', null);
-    }
-    */
 }
 
-function pulse(magnet) {
+function highlight(magnet) {
+    magnet.setStrokeWidth(2);
+    magnet.setFill('rgba(116, 138, 0, 0.8)');
+    magnet.setStroke('rgba(116, 138, 0, 1.0)');
     magnet.transitionTo({
-        scale: {x: 2.5,
-               y: 2.5},
+        scale: {x: 1.8,
+               y: 1.8},
         duration: 0.2
     });
-    setTimeout(function () {
-        magnet.transitionTo({
-            scale: {x: 1.0,
-                   y: 1.0},
-            duration: 0.2
-        });
-    }, 200);
-    setTimeout(function () {
-        magnet.transitionTo({
-            scale: {x: 2.0,
-                   y: 2.0},
-            duration: 0.2
-        });
-    }, 400);
-    setTimeout(function () {
-        magnet.transitionTo({
-            scale: {x: 1.0,
-                   y: 1.0},
-            duration: 0.2
-        });
-    }, 600);
-    setTimeout(function () {
-        magnet.transitionTo({
-            scale: {x: 1.8,
-                   y: 1.8},
-            duration: 0.2
-        });
-    }, 800);
-    setTimeout(function () {
-        magnet.transitionTo({
-            scale: {x: 1.0,
-                   y: 1.0},
-            duration: 0.2
-        });
-    }, 1000);
+}
 
+function unhighlight(magnet) {
+    magnet.setStrokeWidth(1);
+    magnet.setFill('rgba(251,167,13,0.5)');
+    magnet.setStroke('rgba(251,167,13,1.0)');
+    magnet.transitionTo({
+        scale: {x: 1.0,
+               y: 1.0},
+        duration: 0.2
+    });
+    
 }
 
 function addListenersToMagnet(magnet, group) {
     var position = null;
     var selection = null;
-    var clicked = false;
     var marker = null;
     var offscreenLocation = null;
     var deleted = false;
@@ -186,16 +157,20 @@ function addListenersToMagnet(magnet, group) {
     });
 
     magnet.on('mouseup', function (e) {
+        console.log(activeMarker);
         if (e.which === 3) {
          // right mousebutton: delete the magnet
             if ($('.tools .edit').hasClass('selected')) {
-                deleted = true;
-                removeMarker(this.attrs.connection, this._id);
-                $('#hightlightTop').remove();
-                $('#hightlightBottom').remove();
-                marker.clear();
-                this.destroy();
-                group.getLayer().draw();
+                if (confirm("Connection will be deleted")) {
+                    deleted = true;
+                    removeMarker(this.attrs.connection, this._id);
+                    $('#hightlightTop').remove();
+                    $('#hightlightBottom').remove();
+                    activeMarker[this._id].clear();
+                    delete (activeMarker[this._id]);
+                    this.destroy();
+                    group.getLayer().draw();
+                }
             }
         } else {
          // left mousebutton
@@ -218,6 +193,26 @@ function addListenersToMagnet(magnet, group) {
             } else {
                 asyncScroll = false;
             }
+            
+            if(!this.clicked) {
+                $(".magnet-" + this._id).addClass("selectionLink");
+                var connection = JSON.parse(this.attrs.connection);
+                activeHoverMarker[this._id].clear();
+                activeMarker[this._id] = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLink'});
+                highlight(this);
+                this.clicked = true;
+            } else {
+                $(".magnet-" + this._id).removeClass("selectionLink");
+                var connection = JSON.parse(this.attrs.connection);
+                if(activeMarker[this._id]) {
+                    activeMarker[this._id].clear();
+                }
+                activeHoverMarker[this._id] = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLink2'});
+                unhighlight(this);
+                this.clicked = false;
+            }
+            
+            
         }
     });
 
@@ -230,8 +225,7 @@ function addListenersToMagnet(magnet, group) {
         var lastVisibleLine = Math.floor((scrollPos.y + editorHeight) / lineHeight) - 1;
 
         document.body.style.cursor = "pointer";
-        this.setStrokeWidth(3);
-        group.getLayer().draw();
+        //highlight(this);
         // Save the current selection or position of cursor to restore after mouseleave
         if (_activeEditor.hasSelection()) {
             selection = _activeEditor.getSelection();
@@ -239,7 +233,11 @@ function addListenersToMagnet(magnet, group) {
             position = _activeEditor.getCursorPos();
         }
         var connection = JSON.parse(this.attrs.connection);
-        marker = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLink2'});
+        if(!this.clicked) {
+            activeHoverMarker[this._id] = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLink2'});    
+        }
+        
+        //$(".magnet-" + this._id).addClass("selectionLink2");
         if (connection.start.line < firstVisibleLine) {
             $('#editor-holder').append('<div id="hightlightTop"></div>');
             offscreenLocation = 'top';
@@ -256,26 +254,31 @@ function addListenersToMagnet(magnet, group) {
     });
     magnet.on('mouseleave', function () {
         if (!deleted) {
-            if (_activeLayer === "edit") {
-                group.setDraggable(true);
-            }
-            document.body.style.cursor = "default";
-            
-            
-            this.setStrokeWidth(1);
-            this.getLayer().draw();
-            
-            // restore initial selection or position of cursor on mouseleave
-
-            $('#hightlightTop').remove();
-            $('#hightlightBottom').remove();
-            offscreenLocation = null;
-            marker.clear();
+            if(!this.clicked) {
+                if (_activeLayer === "edit") {
+                    group.setDraggable(true);
+                }
+                document.body.style.cursor = "default";
+                this.setStrokeWidth(1);
+                this.setFill('rgba(251,167,13,0.5)');
+                this.setStroke('rgba(251,167,13,1.0)');
+                this.getLayer().draw();
     
-            selection = null;
-            position = null;
+                $('#hightlightTop').remove();
+                $('#hightlightBottom').remove();
+                offscreenLocation = null;
+                if(activeHoverMarker[this._id]) {
+                    activeHoverMarker[this._id].clear();
+                    //delete (activeHoverMarker[this._id]);
+                }
+                
+                $(".magnet-" + this._id).removeClass("selectionLink");
+                selection = null;
+                position = null;
+            }
         }
     });
+    
 }
 
 function addMagnet(group, x, y, connection) {
@@ -291,7 +294,8 @@ function addMagnet(group, x, y, connection) {
         name: 'magnet',
         draggable: true,
         dragOnTop: true,
-        connection: connection
+        connection: connection,
+        clicked: false
     });
     group.add(magnet);
     addListenersToMagnet(magnet, group);
@@ -386,7 +390,7 @@ function addAnchor(group, x, y, name, icon) {
                 var connection = _activeEditor.getSelection();
                 var id = addMagnet(group, 40, 40, JSON.stringify(connection));
                 addMarker(connection, id);
-                marker = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLink2'});
+                marker = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLink'});
                 _activeEditor.setCursorPos(connection.start);
                 layer.draw();
             }
