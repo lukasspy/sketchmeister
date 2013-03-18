@@ -1,5 +1,5 @@
 /*jslint vars: true, plusplus: true, devel: true, nomen: true, regexp: true, indent: 4, maxerr: 50, browser: true*/
-/*global define, $, brackets, window, CodeMirror, document, Kinetic, addImageToStage, addAnchor, addMissionControlAnchor,  allAnchors, addListenersToAnchor, addListenersToMissionControlAnchor, addDeleteAnchor, showAnchors, hideAnchors, addListenersToMagnet, addListenersToMissionControlMagnet, addMarker, removeMarker, highlight, unhighlight, recalculateStartAndEndOfConnection */
+/*global define, $, brackets, window, CodeMirror, document, Kinetic, addImageToStage, addAnchor, addMissionControlAnchor, addMissionControlMarker, allAnchors, addListenersToAnchor, addListenersToMissionControlAnchor, addDeleteAnchor, showAnchors, hideAnchors, addListenersToMagnet, addListenersToMissionControlMagnet, addMarker, removeMarker, highlight, unhighlight, recalculateStartAndEndOfConnection */
 
 var xmlFilename = "sketchmeister.xml";
 var panelSize = 2;
@@ -266,9 +266,8 @@ define(function (require, exports, module) {
                     
                     var magnets = group.get(".magnet");
                     $.each(magnets, function (key, magnet) {
-                        magnet.setDraggable(false);
+                        //magnet.setDraggable(false);
                         //console.log(magnet._id);
-                        addMarker(JSON.parse(magnet.attrs.connection), magnet._id);
                         addListenersToMissionControlMagnet(magnet, group);
                     });
                     
@@ -543,7 +542,6 @@ define(function (require, exports, module) {
         var ignore = ignoreScrollEventsFromEditor;
         ignoreScrollEventsFromEditor = false;
         if (ignore) {
-            console.log("ignoring Panel scroll");
             return false;
         } else if (!asyncScroll) {
             var scrollPos = _activeEditor.getScrollPos();
@@ -558,7 +556,6 @@ define(function (require, exports, module) {
         var ignore = ignoreScrollEventsFromPanel;
         ignoreScrollEventsFromPanel = false;
         if (ignore) {
-            console.log("ignoring Editor scroll");
             return false;
         } else if (!asyncScroll) {
             var scrollPos = $('#myPanel').scrollTop();
@@ -609,6 +606,14 @@ define(function (require, exports, module) {
         // set the current Document as _activeDocument to get additional data of the file
         _activeDocument = DocumentManager.getCurrentDocument();
         var _activeFullPath = DocumentManager.getCurrentDocument().file.fullPath;
+        
+        var magnets = missionControl.stage.get(".magnet");
+        $.each(magnets, function (key, magnet) {
+            if (_activeFullPath === magnet.attrs.fullPath) {
+                addMissionControlMarker(magnet.attrs.fullPath, JSON.parse(magnet.attrs.connection), magnet._id);
+            }
+        });
+
         var _activeFilename = DocumentManager.getCurrentDocument().file.name;
         // go through all already opened sketchingAreas and check if opened file already has a sketchingArea
         var foundSketchingArea = -1;
@@ -1002,13 +1007,15 @@ define(function (require, exports, module) {
         
         EditorManager.getCurrentFullEditor()._codeMirror.on("gutterClick", function (cm, n) {
             var lineInfo = cm.lineInfo(n);
+            
             if (lineInfo.gutterMarkers) {
-                
+                var foundMagnetInNormalStage = 0;
                 $.each(lineInfo.gutterMarkers, function (key, value) {
                     //console.log(_activeStage);
                     var magnets = _activeStage.get(".magnet");
                     $.each(magnets, function (pos, magnet) {
                         if (magnet._id === value.name) {
+                            foundMagnetInNormalStage++;
                             if (magnet.clicked) {
                                 // mark in text is set, so lets clear and delete the mark-reference
                                 unhighlight(magnet);
@@ -1030,10 +1037,10 @@ define(function (require, exports, module) {
                                 var groupHeight = magnet.getParent().get('.image')[0].getHeight();
                                 var magnetsGroupFirstPixel = magnet.getParent().getAbsolutePosition().y;
                                 var magnetsGroupLastPixel = magnet.getParent().getAbsolutePosition().y + groupHeight;
-                                var offscreenLocation = "nix";
-                                if (magnetsGroupFirstPixel > editorLastVisiblePixel) {
+                                var offscreenLocation = "visible";
+                                if (magnetsGroupLastPixel > editorLastVisiblePixel) {
                                     offscreenLocation = "bottom";
-                                } else if (magnetsGroupLastPixel > editorFirstVisiblePixel) {
+                                } else if (magnetsGroupFirstPixel < editorFirstVisiblePixel) {
                                     offscreenLocation = "top";
                                 }
                                 
@@ -1052,7 +1059,6 @@ define(function (require, exports, module) {
                                     activeMarker[magnet._id] = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLink'});
                                     if (offscreenLocation === "bottom") {
                                         var scrollPos = magnetsGroupFirstPixel - (editorHeight - groupHeight);
-                                        console.log(scrollPos);
                                         asyncScroll = true;
                                         myPanel.animate({ scrollTop: scrollPos }, 700);
                                         setTimeout(function () {
@@ -1069,6 +1075,27 @@ define(function (require, exports, module) {
                             }
                         }
                     });
+
+                    if (foundMagnetInNormalStage < Object.keys(lineInfo.gutterMarkers).length) {
+                        magnets = missionControl.stage.get(".magnet");
+                        $.each(magnets, function (pos, magnet) {
+                            if (magnet._id === value.name) {
+                                if (magnet.clicked) {
+                                    unhighlight(magnet);
+                                    magnet.clicked = false;
+                                    activeMarker[magnet._id].clear();
+                                    $(".magnet-" + magnet._id).removeClass('selectionLinkFromMissionControl');
+                                    delete (activeMarker[magnet._id]);
+                                } else {
+                                    highlight(magnet);
+                                    magnet.clicked = true;
+                                    $(".magnet-" + magnet._id).addClass("selectionLinkFromMissionControl");
+                                    var connection = JSON.parse(magnet.attrs.connection);
+                                    activeMarker[magnet._id] = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLinkFromMissionControl'});
+                                }
+                            }
+                        });
+                    }
                 });
                 
             } else {
@@ -1327,13 +1354,13 @@ define(function (require, exports, module) {
             _addToolbarIcon();
             _addHandlers();
             _addMyPanel();
+            missionControl = new MissionControl();
+            missionControl.init();
             
             //initialization ... make stuff and hide everthing
             _toggleStatus();
             _toggleStatus();
             
-            missionControl = new MissionControl();
-            missionControl.init();
         });
     });
 });

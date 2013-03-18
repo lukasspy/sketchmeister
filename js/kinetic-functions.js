@@ -103,6 +103,22 @@ function hideMagnets(group) {
     }
 }
 
+function addMissionControlMarker(fullPath, connection, id) {
+    //_activeEditor._codeMirror.addLineClass(connection.start.line, 'text', 'linkedLine');
+    _activeEditor._codeMirror.options.gutters.push("magnet-" + id);
+    var lines = connection.end.line - connection.start.line;
+    var i;
+    for (i = 0; i <= lines; i++) {
+        var line = connection.start.line + i;
+        var element = document.createElement('div');
+        element.className = "CodeMirror-linkedMissionControlLines magnet-" + id;
+        element.name = id;
+        //element.id = "magnet-" + id;
+        _activeEditor._codeMirror.setGutterMarker(line, "magnet-" + id, element);
+        //console.log(_activeEditor._codeMirror.lineInfo(line));
+    }
+}
+
 function addMarker(connection, id) {
     //_activeEditor._codeMirror.addLineClass(connection.start.line, 'text', 'linkedLine');
     _activeEditor._codeMirror.options.gutters.push("magnet-" + id);
@@ -665,7 +681,7 @@ function addListenersToMissionControlAnchor(anchor, group) {
             if (_activeEditor.hasSelection()) {
                 var connection = _activeEditor.getSelection();
                 var id = addMissionControlMagnet(group, 40, 40, JSON.stringify(connection), DocumentManager.getCurrentDocument().file.fullPath);
-                addMarker(connection, id);
+                addMissionControlMarker(anchor.attrs.fullPath, connection, id);
                 marker = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLink'});
                 _activeEditor.setCursorPos(connection.start);
                 layer.draw();
