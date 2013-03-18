@@ -1,5 +1,5 @@
 /*jslint vars: true, plusplus: true, devel: true, nomen: true, regexp: true, indent: 4, maxerr: 50, browser: true*/
-/*global define, $, brackets, window, CodeMirror, document, Kinetic, addImageToStage, addAnchor, addDeleteAnchor, showAnchors, hideAnchors, addListenersToMagnet, addMarker, removeMarker, highlight, unhighlight, recalculateStartAndEndOfConnection */
+/*global define, $, brackets, window, CodeMirror, document, Kinetic, addImageToStage, addAnchor, addMissionControlAnchor,  allAnchors, addListenersToAnchor, addDeleteAnchor, showAnchors, hideAnchors, addListenersToMagnet, addMarker, removeMarker, highlight, unhighlight, recalculateStartAndEndOfConnection */
 
 var xmlFilename = "sketchmeister.xml";
 var panelSize = 2;
@@ -65,7 +65,7 @@ define(function (require, exports, module) {
     
     require('js/sketch');
     require('js/json2');
-    require('js/debounce');
+    require('js/functions');
     require('js/kinetic-v4.3.1');
     require('js/kinetic-functions');
 
@@ -140,28 +140,38 @@ define(function (require, exports, module) {
                     
                     var group = groups[key];
                     group.setDraggable(false);
-                    if (group.get(".topLeft")[0]) {
-                        group.get(".topLeft")[0].destroy();
-                    }
-                    if (group.get(".topRight")[0]) {
-                        group.get(".topRight")[0].destroy();
-                    }
-                    if (group.get(".bottomLeft")[0]) {
-                        group.get(".bottomLeft")[0].destroy();
-                    }
-                    if (group.get(".bottomRight")[0]) {
-                        group.get(".bottomRight")[0].destroy();
-                    }
                     
+                    var anchors = group.get(".topLeft");
+                    $.each(anchors, function (key, anchor) {
+                        var imageObj = new Image();
+                        imageObj.src = deleteIcon;
+                        anchor.setImage(imageObj);
+                        addListenersToAnchor(anchor, group);
+                    });
+
+                    anchors = group.get(".topRight");
+                    $.each(anchors, function (key, anchor) {
+                        var imageObj = new Image();
+                        imageObj.src = addIcon;
+                        anchor.setImage(imageObj);
+                        addListenersToAnchor(anchor, group);
+                    });
+                    
+                    anchors = group.get(".bottomRight");
+                    $.each(anchors, function (key, anchor) {
+                        addListenersToAnchor(anchor, group);
+
+                    });
+                    
+                    anchors = group.get(".bottomLeft");
+                    $.each(anchors, function (key, anchor) {
+                        addListenersToAnchor(anchor, group);
+                    });
+                    console.log(allAnchors);
                     //addDeleteAnchor(group, width, 0, 'delete');
                     //addAnchor(group, width, height, 'bottomRight');
-                    addAnchor(group, 0, 0, 'topLeft', deleteIcon);
-                    addAnchor(group, width, 0, 'topRight', addIcon);
-                    addAnchor(group, width, height, 'bottomRight');
-                    addAnchor(group, 0, height, 'bottomLeft');
-                    
+                
                     hideAnchors(stage);
-                    
                     var magnets = group.get(".magnet");
                     $.each(magnets, function (key, magnet) {
                         magnet.setDraggable(false);
@@ -234,10 +244,10 @@ define(function (require, exports, module) {
                     //addDeleteAnchor(group, width, 0, 'delete');
                     //addAnchor(group, width, height, 'bottomRight');
                     
-                    addAnchor(group, 0, 0, 'topLeft', deleteIcon);
-                    addAnchor(group, width, 0, 'topRight', addIcon);
-                    addAnchor(group, width, height, 'bottomRight');
-                    addAnchor(group, 0, height, 'bottomLeft');
+                    addMissionControlAnchor(group, 0, 0, 'topLeft', deleteIcon);
+                    addMissionControlAnchor(group, width, 0, 'topRight', addIcon);
+                    addMissionControlAnchor(group, width, height, 'bottomRight');
+                    addMissionControlAnchor(group, 0, height, 'bottomLeft');
                     
                     image.setImage(tempImage);
                     
@@ -520,7 +530,7 @@ define(function (require, exports, module) {
             }
         }
     }
-    
+
     function _scrollEditor() {
         var ignore = ignoreScrollEventsFromPanel;
         ignoreScrollEventsFromPanel = false;
@@ -557,9 +567,22 @@ define(function (require, exports, module) {
         var gutter = _activeEditor._codeMirror.getWrapperElement().getElementsByClassName("CodeMirror-gutter")[0];
 
         // if _activeEditor gets scrolled then also scroll the sketching overlay
+        /*
+        $(_activeEditor.getScrollerElement()).on("scroll.editor", _scroll);
+        $(_activeEditor.getScrollerElement()).on("scrollstart", function () {
+            ignoreScrollEventsFromEditor = true;
+        });
+        */
         $(_activeEditor).on("scroll", _scroll);
-        myPanel.on("scroll", _scrollEditor);
         
+        myPanel.on("scroll", _scrollEditor);
+        /*myPanel.on("scrollstart", function () {
+            ignoreScrollEventsFromPanel = true;
+        });
+        myPanel.on("scrollstop", function () {
+            ignoreScrollEventsFromPanel = false;
+        });
+        */
         // set the current Document as _activeDocument to get additional data of the file
         _activeDocument = DocumentManager.getCurrentDocument();
         var _activeFullPath = DocumentManager.getCurrentDocument().file.fullPath;
@@ -757,10 +780,11 @@ define(function (require, exports, module) {
     
     MissionControl.prototype.init = function () {
         this.overlay.appendTo("body");
-        this.stage = createStageForMissionControl("missionControl", $("body").width(), $("body").height());
+        this.stage = createStageForMissionControl("missionControl", $(".content").width(), $(".content").height());
         this.imageLayering = new Kinetic.Layer({id: 'images'});
         this.stage.add(this.imageLayering);
         $('#missionControl .kineticjs-content').css('z-index', '21');
+        $("#missionControl").css("margin-left", $("#sidebar").width());
     };
     
     MissionControl.prototype.zoomIn = function () {
@@ -848,10 +872,10 @@ define(function (require, exports, module) {
             imageGroup.add(newImg);
             thisMissionControl.imageLayering.add(imageGroup);
     
-            addAnchor(imageGroup, 0, 0, 'topLeft');
-            addAnchor(imageGroup, widthResized, 0, 'topRight');
-            addAnchor(imageGroup, widthResized, heightResized, 'bottomRight');
-            addAnchor(imageGroup, 0, heightResized, 'bottomLeft');
+            addMissionControlAnchor(imageGroup, 0, 0, 'topLeft', deleteIcon);
+            addMissionControlAnchor(imageGroup, widthResized, 0, 'topRight', addIcon);
+            addMissionControlAnchor(imageGroup, widthResized, heightResized, 'bottomRight');
+            addMissionControlAnchor(imageGroup, 0, heightResized, 'bottomLeft');
             
             $('#tempImage').remove();
             thisMissionControl.stage.draw();
@@ -862,7 +886,7 @@ define(function (require, exports, module) {
     function resetAllVariables() {
         _sketchingAreaIdCounter = 0;
         xmlData = "";
-        $xml = "";
+        $xml = null;
         active = false;
         firstActivation = true;
 
@@ -899,9 +923,10 @@ define(function (require, exports, module) {
         myPanel.insertAfter($('.content'));
         myPanel.mouseleave(function () {
             if (!$('.tools .edit').hasClass('selected')) {
-                myPanel.animate({ scrollTop: _activeEditor.getScrollPos().y }, 700, function () {
+                myPanel.animate({ scrollTop: _activeEditor.getScrollPos().y }, 700);
+                setTimeout(function () {
                     asyncScroll = false;
-                });
+                }, 750);
             }
         });
         //Resizer.makeResizable(myPanel, 'horz', 'LEFT', '200', false, true);
@@ -935,15 +960,21 @@ define(function (require, exports, module) {
             _activeSketchingArea.sketchArea.redraw();
             showMyPanel();
         }
-        Resizer.toggle(myPanel);
+        //Resizer.toggle(myPanel);
     }
 
     function _addHandlers() {
         $(DocumentManager).on("currentDocumentChange", function () {
-            currentDocumentChanged();
+            if (!_projectClosed) {
+                currentDocumentChanged();
+            }
             if (active) {
                 saveAll();
             }
+        });
+        
+        $(".CodeMirror").on("mouseover", ".CodeMirror-linkedLines", function (e) {
+            console.log(e.target);
         });
         
         EditorManager.getCurrentFullEditor()._codeMirror.on("gutterClick", function (cm, n) {
@@ -962,9 +993,27 @@ define(function (require, exports, module) {
                                 activeMarker[magnet._id].clear();
                                 $(".magnet-" + magnet._id).removeClass('selectionLink');
                                 delete (activeMarker[magnet._id]);
+                                asyncScroll = true;
+                                myPanel.animate({ scrollTop: $(_activeEditor.getScrollerElement()).scrollTop() }, 700);
+                                setTimeout(function () {
+                                    asyncScroll = false;
+                                }, 750);
                             } else {
                                 // no mark in text, so lets get the magnet and mark corresponding text
                                 //console.log(magnet);
+                                var editorHeight = $(_activeEditor.getScrollerElement()).height();
+                                var editorFirstVisiblePixel = _activeEditor.getScrollPos().y;
+                                var editorLastVisiblePixel = editorFirstVisiblePixel + editorHeight;
+                                var groupHeight = magnet.getParent().get('.image')[0].getHeight();
+                                var magnetsGroupFirstPixel = magnet.getParent().getAbsolutePosition().y;
+                                var magnetsGroupLastPixel = magnet.getParent().getAbsolutePosition().y + groupHeight;
+                                var offscreenLocation = "nix";
+                                if (magnetsGroupFirstPixel > editorLastVisiblePixel) {
+                                    offscreenLocation = "bottom";
+                                } else if (magnetsGroupLastPixel > editorFirstVisiblePixel) {
+                                    offscreenLocation = "top";
+                                }
+                                
                                 var timeout = 0;
                                 if (!active) {
                                     _toggleStatus();
@@ -978,7 +1027,21 @@ define(function (require, exports, module) {
                                     var connection = JSON.parse(magnet.attrs.connection);
                                     //console.log(connection);
                                     activeMarker[magnet._id] = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLink'});
-                                   
+                                    if (offscreenLocation === "bottom") {
+                                        var scrollPos = magnetsGroupFirstPixel - (editorHeight - groupHeight);
+                                        console.log(scrollPos);
+                                        asyncScroll = true;
+                                        myPanel.animate({ scrollTop: scrollPos }, 700);
+                                        setTimeout(function () {
+                                            asyncScroll = false;
+                                        }, 750);
+                                    } else if (offscreenLocation === "top") {
+                                        asyncScroll = true;
+                                        myPanel.animate({ scrollTop: magnetsGroupFirstPixel - 10 }, 700);
+                                        setTimeout(function () {
+                                            asyncScroll = false;
+                                        }, 750);
+                                    }
                                 }, timeout);
                             }
                         }
@@ -1007,10 +1070,17 @@ define(function (require, exports, module) {
         });
         
         $(ProjectManager).on("projectOpen", function () {
-            resetAllVariables();
+            setTimeout(function () {
+                _projectClosed = false;
+                resetAllVariables();
+                readXmlFileData();
+                
+            }, 2000);
+            
         });
         $(ProjectManager).on("beforeProjectClose", function () {
             _projectClosed = true;
+            
             //save();
             
         });
@@ -1049,14 +1119,6 @@ define(function (require, exports, module) {
             saveMissionControl();
             saveSketchesAndImagesOfAllAreas();
             writeXmlDataToFile();
-        });
-        
-        $('.CodeMirror-linenumbers1').click(function () {
-            //console.log($(this).text());
-            var lineClass = $(this).next().children('.CodeMaster-linkedLines')[0].attr('class');
-            alert(lineClass);
-            lineClass.replace('magnet-', '').replace('CodeMaster-linkedLines', '');
-            //console.log(lineClass);
         });
         
         $('#toggle-sketching').click(function () {
@@ -1124,9 +1186,10 @@ define(function (require, exports, module) {
             if ($(this).hasClass('selected')) {
                 //deactivate edit mode
                 _activeLayer = "image";
-                myPanel.animate({ scrollTop: _activeEditor.getScrollPos().y }, 700, function () {
+                myPanel.animate({ scrollTop: _activeEditor.getScrollPos().y }, 700);
+                setTimeout(function () {
                     asyncScroll = false;
-                });
+                }, 750);
                 $(this).removeClass('selected');
                 hideAnchors(_activeSketchingArea.stage);
                 
@@ -1169,6 +1232,16 @@ define(function (require, exports, module) {
             NativeFileSystem.showOpenDialog(true, false, "Choose a file...", null, ['png', 'jpg', 'gif', 'jpeg'], function (files) {
                 _activeLayer = "edit";
                 asyncScroll = true;
+                showAnchors(_activeSketchingArea.stage);
+                $('.tools .sketch-layer').removeClass('selected');
+                var magnets = _activeStage.get(".magnet");
+                $.each(magnets, function (key, magnet) {
+                    magnet.setDraggable(true);
+                });
+                var groups = _activeStage.get(".group");
+                $.each(groups, function (key, group) {
+                    group.setDraggable(true);
+                });
                 insertFileToImageArea(files);
             }, function (err) {});
             //addImageToStage(testImage);
