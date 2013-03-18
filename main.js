@@ -1,5 +1,5 @@
 /*jslint vars: true, plusplus: true, devel: true, nomen: true, regexp: true, indent: 4, maxerr: 50, browser: true*/
-/*global define, $, brackets, window, CodeMirror, document, Kinetic, addImageToStage, addAnchor, addMissionControlAnchor,  allAnchors, addListenersToAnchor, addDeleteAnchor, showAnchors, hideAnchors, addListenersToMagnet, addMarker, removeMarker, highlight, unhighlight, recalculateStartAndEndOfConnection */
+/*global define, $, brackets, window, CodeMirror, document, Kinetic, addImageToStage, addAnchor, addMissionControlAnchor,  allAnchors, addListenersToAnchor, addListenersToMissionControlAnchor, addDeleteAnchor, showAnchors, hideAnchors, addListenersToMagnet, addListenersToMissionControlMagnet, addMarker, removeMarker, highlight, unhighlight, recalculateStartAndEndOfConnection */
 
 var xmlFilename = "sketchmeister.xml";
 var panelSize = 2;
@@ -142,17 +142,18 @@ define(function (require, exports, module) {
                     group.setDraggable(false);
                     
                     var anchors = group.get(".topLeft");
+                    var imageObj = new Image();
+                    imageObj.src = deleteIcon;
                     $.each(anchors, function (key, anchor) {
-                        var imageObj = new Image();
-                        imageObj.src = deleteIcon;
+                        
                         anchor.setImage(imageObj);
                         addListenersToAnchor(anchor, group);
                     });
 
                     anchors = group.get(".topRight");
+                    imageObj = new Image();
+                    imageObj.src = addIcon;
                     $.each(anchors, function (key, anchor) {
-                        var imageObj = new Image();
-                        imageObj.src = addIcon;
                         anchor.setImage(imageObj);
                         addListenersToAnchor(anchor, group);
                     });
@@ -167,7 +168,6 @@ define(function (require, exports, module) {
                     $.each(anchors, function (key, anchor) {
                         addListenersToAnchor(anchor, group);
                     });
-                    console.log(allAnchors);
                     //addDeleteAnchor(group, width, 0, 'delete');
                     //addAnchor(group, width, height, 'bottomRight');
                 
@@ -236,18 +236,41 @@ define(function (require, exports, module) {
                 $('<img src="' + image.attrs.src + '" id="tempImage" class="visibility: hidden"/>').load(function () {
                     
                     var group = groups[key];
-                    group.get(".topLeft")[0].destroy();
-                    group.get(".topRight")[0].destroy();
-                    group.get(".bottomLeft")[0].destroy();
-                    group.get(".bottomRight")[0].destroy();
                     
-                    //addDeleteAnchor(group, width, 0, 'delete');
-                    //addAnchor(group, width, height, 'bottomRight');
+                    var anchors = group.get(".topLeft");
+                    var imageObj = new Image();
+                    imageObj.src = deleteIcon;
+                    $.each(anchors, function (key, anchor) {
+                        anchor.setImage(imageObj);
+                        addListenersToMissionControlAnchor(anchor, group);
+                    });
+
+                    anchors = group.get(".topRight");
+                    imageObj = new Image();
+                    imageObj.src = addIcon;
+                    $.each(anchors, function (key, anchor) {
+                        anchor.setImage(imageObj);
+                        addListenersToMissionControlAnchor(anchor, group);
+                    });
                     
-                    addMissionControlAnchor(group, 0, 0, 'topLeft', deleteIcon);
-                    addMissionControlAnchor(group, width, 0, 'topRight', addIcon);
-                    addMissionControlAnchor(group, width, height, 'bottomRight');
-                    addMissionControlAnchor(group, 0, height, 'bottomLeft');
+                    anchors = group.get(".bottomRight");
+                    $.each(anchors, function (key, anchor) {
+                        addListenersToMissionControlAnchor(anchor, group);
+
+                    });
+                    
+                    anchors = group.get(".bottomLeft");
+                    $.each(anchors, function (key, anchor) {
+                        addListenersToMissionControlAnchor(anchor, group);
+                    });
+                    
+                    var magnets = group.get(".magnet");
+                    $.each(magnets, function (key, magnet) {
+                        magnet.setDraggable(false);
+                        //console.log(magnet._id);
+                        addMarker(JSON.parse(magnet.attrs.connection), magnet._id);
+                        addListenersToMissionControlMagnet(magnet, group);
+                    });
                     
                     image.setImage(tempImage);
                     

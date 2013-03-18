@@ -6,6 +6,10 @@
     background: rgba(116, 138, 0, 0.3)!important;
 }
 
+.selectionLinkFromMissionControl {
+    background: rgba(0, 27, 138, 0.3)!important;
+}
+
 .CodeMirror-linkedLines {
     width: 40px;
     height: 15px;

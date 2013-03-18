@@ -1,5 +1,5 @@
 /*jslint vars: true, plusplus: true, devel: true, nomen: true, regexp: true, indent: 4, maxerr: 50, browser: true*/
-/*global define, $, brackets, window, CodeMirror, document, Kinetic, addImageToStage, _activeEditor, asyncScroll, _activeLayer, activeMarker, allAnchors */
+/*global define, $, brackets, window, CodeMirror, document, Kinetic, addImageToStage, _activeEditor, asyncScroll, _activeLayer, activeMarker, allAnchors, missionControl */
 var DocumentManager = brackets.getModule("document/DocumentManager");
 var sketchIconActive = require.toUrl('./sketch_button_on.png');
 var sketchIconDeactive = require.toUrl('./sketch_button_off.png');
@@ -299,7 +299,6 @@ function addListenersToMissionControlMagnet(magnet, group) {
     });
 
     magnet.on('mouseup', function (e) {
-        console.log(activeMarker);
         if (e.which === 3) {
          // right mousebutton: delete the magnet
             if ($('.tools .edit').hasClass('selected')) {
@@ -317,7 +316,16 @@ function addListenersToMissionControlMagnet(magnet, group) {
         } else {
          // left mousebutton
             var connection = JSON.parse(this.attrs.connection);
-            DocumentManager.setCurrentDocument(DocumentManager.getDocumentForPath(this.fullPath));
+            var documentToOpen = DocumentManager.getDocumentForPath(this.attrs.fullPath);
+            documentToOpen.then(
+                function (object) {
+                    DocumentManager.setCurrentDocument(object);
+                    missionControl.toggle();
+                },
+                function (error) {
+                // saving the object failed.
+                }
+            );
             if (!this.clicked) {
                 
                 if (offscreenLocation) {
@@ -472,8 +480,6 @@ function addMissionControlMagnet(group, x, y, connection, fullPath) {
 }
 
 function addListenersToAnchor(anchor, group) {
-    console.log(anchor);
-    console.log(group);
     var stage = group.getStage();
     var layer = group.getLayer();
     var deleted = false;
@@ -628,6 +634,93 @@ function addAnchor(group, x, y, name, icon) {
     
 }
 
+function addListenersToMissionControlAnchor(anchor, group) {
+    var stage = group.getStage();
+    var layer = group.getLayer();
+    var deleted = false;
+    var marker = null;
+    var oldX, oldY;
+    
+    anchor.on('dragmove', function () {
+        update(this);
+        
+        this.getLayer().draw();
+    });
+
+    if (anchor.attrs.name === "topLeft") {
+        anchor.on('mouseup touchend', function () {
+            group.setDraggable(false);
+            if (confirm("Remove the image!")) {
+                deleted = true;
+                $.each(group.get(".magnet"), function (pos, magnet) {
+                    removeMarker(magnet._id);
+                    activeMarker[this._id].clear();
+                });
+                group.destroy();
+                stage.draw();
+            }
+        });
+    } else if (anchor.attrs.name === "topRight") {
+        anchor.on('mouseup touchend', function () {
+            if (_activeEditor.hasSelection()) {
+                var connection = _activeEditor.getSelection();
+                var id = addMissionControlMagnet(group, 40, 40, JSON.stringify(connection), DocumentManager.getCurrentDocument().file.fullPath);
+                addMarker(connection, id);
+                marker = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLink'});
+                _activeEditor.setCursorPos(connection.start);
+                layer.draw();
+            }
+        });
+    } else {
+        anchor.on('mousedown touchstart', function () {
+            oldX = this.getX();
+            oldY = this.getY();
+            group.setDraggable(false);
+            this.moveToTop();
+            hideMagnets(group);
+        });
+        
+        anchor.on('mouseup touchend', function () {
+            
+        });
+    }
+    anchor.on('dragend', function () {
+        updateMagnets(this, oldX, oldY);
+        showMagnets(group);
+        group.setDraggable(true);
+        layer.draw();
+    });
+    // add hover styling
+    if (anchor.attrs.name === "topLeft") {
+        anchor.on('mouseover', function (e) {
+            document.body.style.cursor = anchor.attrs.cursorStyle;
+            group.get(".image")[0].setStroke("#EE8900");
+            stage.draw();
+        });
+    } else {
+        anchor.on('mouseover', function () {
+            document.body.style.cursor = anchor.attrs.cursorStyle;
+            group.get(".image")[0].setStroke("#EE8900");
+            stage.draw();
+        });
+    }
+    anchor.on('mouseleave', function () {
+        if (anchor.attrs.name === "topRight") {
+            if (marker) {
+                marker.clear();
+            }
+        }
+        document.body.style.cursor = 'default';
+        if (!deleted) {
+            this.parent.get(".image")[0].setStroke("transparent");
+            this.parent.setDraggable(true);
+        }
+        stage.draw();
+    });
+
+    allMissionControlAnchors.push(anchor);
+}
+
 function addMissionControlAnchor(group, x, y, name, icon) {
     var stage = group.getStage();
     var layer = group.getLayer();
@@ -676,6 +769,7 @@ function addMissionControlAnchor(group, x, y, name, icon) {
             width: 30,
             height: 30,
             name: name,
+            cursorStyle: cursorStyle,
             draggable: draggable,
             dragOnTop: false
         });
@@ -688,90 +782,13 @@ function addMissionControlAnchor(group, x, y, name, icon) {
             strokeWidth: 1,
             radius: radius,
             name: name,
+            cursorStyle: cursorStyle,
             draggable: draggable,
             dragOnTop: false
         });
     }
     group.add(anchor);
-
-    anchor.on('dragmove', function () {
-        update(this);
-        
-        this.getLayer().draw();
-    });
-
-    if (name === "topLeft") {
-        anchor.on('mouseup touchend', function () {
-            group.setDraggable(false);
-            if (confirm("Remove the image!")) {
-                deleted = true;
-                $.each(group.get(".magnet"), function (pos, magnet) {
-                    removeMarker(magnet._id);
-                    activeMarker[this._id].clear();
-                });
-                group.destroy();
-                stage.draw();
-            }
-        });
-    } else if (name === "topRight") {
-        anchor.on('mouseup touchend', function () {
-            if (_activeEditor.hasSelection()) {
-                var connection = _activeEditor.getSelection();
-                var id = addMissionControlMagnet(group, 40, 40, JSON.stringify(connection), DocumentManager.getCurrentDocument().file.fullPath);
-                addMarker(connection, id);
-                marker = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLink'});
-                _activeEditor.setCursorPos(connection.start);
-                layer.draw();
-            }
-        });
-    } else {
-        anchor.on('mousedown touchstart', function () {
-            oldX = this.getX();
-            oldY = this.getY();
-            group.setDraggable(false);
-            this.moveToTop();
-            hideMagnets(group);
-        });
-        
-        anchor.on('mouseup touchend', function () {
-            
-        });
-    }
-    anchor.on('dragend', function () {
-        updateMagnets(this, oldX, oldY);
-        showMagnets(group);
-        group.setDraggable(true);
-        layer.draw();
-    });
-    // add hover styling
-    if (name === "topLeft") {
-        anchor.on('mouseover', function (e) {
-            document.body.style.cursor = cursorStyle;
-            group.get(".image")[0].setStroke("#EE8900");
-            stage.draw();
-        });
-    } else {
-        anchor.on('mouseover', function () {
-            document.body.style.cursor = cursorStyle;
-            group.get(".image")[0].setStroke("#EE8900");
-            stage.draw();
-        });
-    }
-    anchor.on('mouseleave', function () {
-        if (name === "topRight") {
-            if (marker) {
-                marker.clear();
-            }
-        }
-        document.body.style.cursor = 'default';
-        if (!deleted) {
-            this.parent.get(".image")[0].setStroke("transparent");
-            this.parent.setDraggable(true);
-        }
-        stage.draw();
-    });
-
-    allMissionControlAnchors.push(anchor);
+    addListenersToMissionControlAnchor(anchor, group);
 }
 
 function whereIsThePointInRelationToTwoOtherPoints(point, from, to) {
