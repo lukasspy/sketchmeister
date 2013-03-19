@@ -1,5 +1,5 @@
 /*jslint vars: true, plusplus: true, devel: true, nomen: true, regexp: true, indent: 4, maxerr: 50, browser: true*/
-/*global define, $, brackets, window, CodeMirror, document, Kinetic, addImageToStage, addAnchor, addMissionControlAnchor, unhighlightMissionControl, highlightMissionControl, addMissionControlMarker, allAnchors, addListenersToAnchor, addListenersToMissionControlAnchor, addDeleteAnchor, showAnchors, hideAnchors, addListenersToMagnet, addListenersToMissionControlMagnet, addMarker, removeMarker, highlight, unhighlight, recalculateStartAndEndOfConnection */
+/*global define, $, brackets, window, CodeMirror, _toggleStatus, document, Kinetic, addImageToStage, addAnchor, addMissionControlAnchor, unhighlightMissionControl, highlightMissionControl, addMissionControlMarker, allAnchors, addListenersToAnchor, addListenersToMissionControlAnchor, addDeleteAnchor, showAnchors, hideAnchors, addListenersToMagnet, addListenersToMissionControlMagnet, addMarker, removeMarker, highlight, unhighlight, recalculateStartAndEndOfConnection */
 
 var xmlFilename = "sketchmeister.xml";
 var panelSize = 2;
@@ -246,6 +246,7 @@ define(function (require, exports, module) {
                     });
 
                     anchors = group.get(".topRight");
+                    
                     imageObj = new Image();
                     imageObj.src = addIcon;
                     $.each(anchors, function (key, anchor) {
@@ -274,16 +275,20 @@ define(function (require, exports, module) {
                     image.setImage(tempImage);
                     
                     image.on('mouseover', function () {
-                        var layer = this.getLayer();
-                        document.body.style.cursor = "move";
-                        this.setStroke("#EE8900");
-                        layer.draw();
+                        if (missionControl.editMode) {
+                            var layer = this.getLayer();
+                            document.body.style.cursor = "move";
+                            this.setStroke("#EE8900");
+                            layer.draw();
+                        }
                     });
                     image.on('mouseout', function () {
-                        var layer = this.getLayer();
-                        document.body.style.cursor = 'default';
-                        this.setStroke("transparent");
-                        layer.draw();
+                        if (missionControl.editMode) {
+                            var layer = this.getLayer();
+                            document.body.style.cursor = 'default';
+                            this.setStroke("transparent");
+                            layer.draw();
+                        }
                     });
                     
                     $('#tempImage').remove();
@@ -394,6 +399,7 @@ define(function (require, exports, module) {
         $('#tools-' + id).append("<a href='#' class='add-image button'>+</a> ");
         $('#tools-' + id).append("<a href='#' class='image-layer edit'>edit</a> ");
         //$('#tools-' + id).append("<a href='#' class='asyncScrolling button'>scroll</a> ");
+        $('#tools-' + id).append("<a href='#' class='redraw button'>redraw</a> ");
         $('#tools-' + id).append("<a href='#' class='sketch-layer button'>sketch</a> ");
         
         var sketchingTools = $('<div class="sketching-tools"></div>');
@@ -590,16 +596,13 @@ define(function (require, exports, module) {
 
         // set the current Document as _activeDocument to get additional data of the file
         _activeDocument = DocumentManager.getCurrentDocument();
-        
-        
-        
+
         var _activeFullPath = DocumentManager.getCurrentDocument().file.fullPath;
-        
-        
+
         var magnets = missionControl.stage.get(".magnet");
         $.each(magnets, function (key, magnet) {
             if (_activeFullPath === magnet.attrs.fullPath) {
-                addMissionControlMarker(magnet.attrs.fullPath, JSON.parse(magnet.attrs.connection), magnet._id);
+                addMissionControlMarker(JSON.parse(magnet.attrs.connection), magnet._id);
             }
         });
     
@@ -615,10 +618,6 @@ define(function (require, exports, module) {
                 foundSketchingArea = key;
             }
         });
-        
-        // scroll to same position as currentEditor, since the position in the editor gets stored. Otherwise not synced before first scroll
-        
-        
         
         // if sketchingArea is already loaded set it as active, else create a new sketchingArea and add it to Array of sketchingAreas
         if (foundSketchingArea !== -1) {
@@ -641,7 +640,7 @@ define(function (require, exports, module) {
             EditorManager.getCurrentFullEditor()._codeMirror.on("change", function (cm, change) {
                 var magnets = _activeStage.get(".magnet");
                 $.each(magnets, function (pos, magnet) {
-                    var reCalculatedConnection = recalculateStartAndEndOfConnection(magnet, cm, change);
+                    var reCalculatedConnection = recalculateStartAndEndOfConnection(magnet, cm, change, 0);
                     if (reCalculatedConnection) {
                         magnet.attrs.connection = reCalculatedConnection;
                     } else {
@@ -652,7 +651,7 @@ define(function (require, exports, module) {
                 
                 magnets = missionControl.stage.get(".magnet");
                 $.each(magnets, function (pos, magnet) {
-                    var reCalculatedConnection = recalculateStartAndEndOfConnection(magnet, cm, change);
+                    var reCalculatedConnection = recalculateStartAndEndOfConnection(magnet, cm, change, 1);
                     if (reCalculatedConnection) {
                         magnet.attrs.connection = reCalculatedConnection;
                     } else {
@@ -665,11 +664,9 @@ define(function (require, exports, module) {
             
             EditorManager.getCurrentFullEditor()._codeMirror.on("gutterClick", function (cm, n) {
                 var lineInfo = cm.lineInfo(n);
-                console.log(lineInfo);
                 if (lineInfo.gutterMarkers) {
                     var foundMagnetInNormalStage = 0;
                     $.each(lineInfo.gutterMarkers, function (key, value) {
-                        console.log(value);
                         var magnets = _activeStage.get(".magnet");
                         $.each(magnets, function (pos, magnet) {
                             if (magnet._id === value.name) {
@@ -771,40 +768,6 @@ define(function (require, exports, module) {
         
         //when document is changed the editor position was stored, so the panel needs to be synced on reentering
         myPanel.scrollTop(_activeEditor.getScrollPos().y);
-       
-        
-        /*
-        _activeEditor._codeMirror.off("gutterClick");
-        _activeEditor._codeMirror.on("gutterClick", function (cm, n) {
-            console.log("eventhandler from inside docchange");
-            
-            var lineInfo = cm.lineInfo(n);
-            if (lineInfo.gutterMarkers) {
-                var foundMagnetInNormalStage = 0;
-                $.each(lineInfo.gutterMarkers, function (key, value) {
-                    magnets = missionControl.stage.get(".magnet");
-                    $.each(magnets, function (pos, magnet) {
-                        if (magnet._id === value.name) {
-                            if (magnet.clicked) {
-                                unhighlightMissionControl(magnet);
-                                magnet.clicked = false;
-                                activeMarker[magnet._id].clear();
-                                $(".magnet-" + magnet._id).removeClass('selectionLinkFromMissionControl');
-                                delete (activeMarker[magnet._id]);
-                            } else {
-                                highlightMissionControl(magnet);
-                                magnet.clicked = true;
-                                $(".magnet-" + magnet._id).addClass("selectionLinkFromMissionControl");
-                                var connection = JSON.parse(magnet.attrs.connection);
-                                activeMarker[magnet._id] = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLinkFromMissionControl'});
-                            }
-                        }
-                    });
-                });
-            }
-           
-        });
-        */
     }
 
     function deleteSketchingArea(id) {
@@ -946,8 +909,9 @@ define(function (require, exports, module) {
     }
     
     function MissionControl() {
-        this.overlay = $('<div id="missionControl"><div class="left controls"><a href="#" class="add"></div><div class="right controls"><a href="#" class="zoomin"></a><a href="#" class="zoomout"></a></div></div>');
+        this.overlay = $('<div id="missionControl"><div class="left controls"><a href="#" class="add"></a><a href="#" class="edit"></a></div><div class="right controls"><a href="#" class="zoomin"></a><a href="#" class="zoomout"></a></div></div>');
         this.active = false;
+        this.editMode = false;
         this.stage = null;
         this.imageLayering = null;
     }
@@ -959,6 +923,8 @@ define(function (require, exports, module) {
         this.stage.add(this.imageLayering);
         $('#missionControl .kineticjs-content').css('z-index', '21');
         $("#missionControl").css("margin-left", $("#sidebar").width());
+        this.editMode = true;
+        this.toggleEditMode();
     };
     
     MissionControl.prototype.zoomIn = function () {
@@ -979,13 +945,73 @@ define(function (require, exports, module) {
     MissionControl.prototype.toggle = function () {
         if (this.active) {
             this.active = false;
-            this.overlay.fadeOut("fast");
+            this.overlay.hide(); //fadeOut("fast");
             saveMissionControl();
             writeXmlDataToFile();
         } else {
             this.active = true;
-            this.overlay.fadeIn("fast");
+            this.overlay.show(); //fadeIn("fast");
         }
+    };
+    
+    MissionControl.prototype.toggleEditMode = function () {
+        var anchors, magnets, groups;
+        if (this.editMode) {
+            this.editMode = false;
+            anchors = this.stage.get('.topLeft');
+            $.each(anchors, function (index, anchor) {
+                anchor.hide();
+            });
+            anchors = this.stage.get('.topRight');
+            $.each(anchors, function (index, anchor) {
+                anchor.hide();
+            });
+            anchors = this.stage.get('.bottomLeft');
+            $.each(anchors, function (index, anchor) {
+                anchor.hide();
+            });
+            anchors = this.stage.get('.bottomRight');
+            $.each(anchors, function (index, anchor) {
+                anchor.hide();
+            });
+            
+            magnets = this.stage.get(".magnet");
+            $.each(magnets, function (key, magnet) {
+                magnet.setDraggable(false);
+            });
+            groups = this.stage.get(".group");
+            $.each(groups, function (key, group) {
+                group.setDraggable(false);
+            });
+        } else {
+            this.editMode = true;
+            anchors = this.stage.get('.topLeft');
+            $.each(anchors, function (index, anchor) {
+                anchor.show();
+            });
+            anchors = this.stage.get('.topRight');
+            $.each(anchors, function (index, anchor) {
+                anchor.show();
+            });
+            anchors = this.stage.get('.bottomLeft');
+            $.each(anchors, function (index, anchor) {
+                anchor.show();
+            });
+            anchors = this.stage.get('.bottomRight');
+            $.each(anchors, function (index, anchor) {
+                anchor.show();
+            });
+            
+            magnets = this.stage.get(".magnet");
+            $.each(magnets, function (key, magnet) {
+                magnet.setDraggable(true);
+            });
+            groups = this.stage.get(".group");
+            $.each(groups, function (key, group) {
+                group.setDraggable(true);
+            });
+        }
+        this.stage.draw();
     };
     
     MissionControl.prototype.addImage = function (imageToAdd) {
@@ -1031,16 +1057,20 @@ define(function (require, exports, module) {
             });
             
             newImg.on('mouseover', function () {
-                var layer = this.getLayer();
-                document.body.style.cursor = "move";
-                this.setStroke("#EE8900");
-                layer.draw();
+                if (thisMissionControl.editMode) {
+                    var layer = this.getLayer();
+                    document.body.style.cursor = "move";
+                    this.setStroke("#EE8900");
+                    layer.draw();
+                }
             });
             newImg.on('mouseout', function () {
-                var layer = this.getLayer();
-                document.body.style.cursor = 'default';
-                this.setStroke("transparent");
-                layer.draw();
+                if (thisMissionControl.editMode) {
+                    var layer = this.getLayer();
+                    document.body.style.cursor = 'default';
+                    this.setStroke("transparent");
+                    layer.draw();
+                }
             });
     
             imageGroup.add(newImg);
@@ -1147,95 +1177,6 @@ define(function (require, exports, module) {
             }
         });
         
-       /*
-        EditorManager.getCurrentFullEditor()._codeMirror.on("gutterClick", function (cm, n) {
-            console.log(cm);
-            console.log("linenumber: " + n);
-            
-             
-            var lineInfo = cm.lineInfo(n);
-            console.log(lineInfo);
-            if (lineInfo.gutterMarkers) {
-                var foundMagnetInNormalStage = 0;
-                $.each(lineInfo.gutterMarkers, function (key, value) {
-                    console.log(value);
-                    var magnets = _activeStage.get(".magnet");
-                    $.each(magnets, function (pos, magnet) {
-                        if (magnet._id === value.name) {
-                            foundMagnetInNormalStage++;
-                            if (magnet.clicked) {
-                                // mark in text is set, so lets clear and delete the mark-reference
-                                unhighlight(magnet);
-                                magnet.clicked = false;
-                                activeMarker[magnet._id].clear();
-                                $(".magnet-" + magnet._id).removeClass('selectionLink');
-                                delete (activeMarker[magnet._id]);
-                                asyncScroll = true;
-                                myPanel.animate({ scrollTop: $(_activeEditor.getScrollerElement()).scrollTop() }, 700);
-                                setTimeout(function () {
-                                    asyncScroll = false;
-                                }, 750);
-                            } else {
-                                // no mark in text, so lets get the magnet and mark corresponding text
-                                //console.log(magnet);
-                                var editorHeight = $(_activeEditor.getScrollerElement()).height();
-                                var editorFirstVisiblePixel = _activeEditor.getScrollPos().y;
-                                var editorLastVisiblePixel = editorFirstVisiblePixel + editorHeight;
-                                var groupHeight = magnet.getParent().get('.image')[0].getHeight();
-                                var magnetsGroupFirstPixel = magnet.getParent().getAbsolutePosition().y;
-                                var magnetsGroupLastPixel = magnet.getParent().getAbsolutePosition().y + groupHeight;
-                                var offscreenLocation = "visible";
-                                if (magnetsGroupLastPixel > editorLastVisiblePixel) {
-                                    offscreenLocation = "bottom";
-                                } else if (magnetsGroupFirstPixel < editorFirstVisiblePixel) {
-                                    offscreenLocation = "top";
-                                }
-                                
-                                var timeout = 0;
-                                if (!active) {
-                                    _toggleStatus();
-                                    //set the timeout: if panel has not been opened yet it takes a little time and then the animation would be missed
-                                    timeout = 100;
-                                }
-                                setTimeout(function () {
-                                    highlight(magnet);
-                                    magnet.clicked = true;
-                                    $(".magnet-" + magnet._id).addClass("selectionLink");
-                                    var connection = JSON.parse(magnet.attrs.connection);
-                                    //console.log(connection);
-                                    activeMarker[magnet._id] = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLink'});
-                                    if (offscreenLocation === "bottom") {
-                                        var scrollPos = magnetsGroupFirstPixel - (editorHeight - groupHeight);
-                                        asyncScroll = true;
-                                        myPanel.animate({ scrollTop: scrollPos }, 700);
-                                        setTimeout(function () {
-                                            asyncScroll = false;
-                                        }, 750);
-                                    } else if (offscreenLocation === "top") {
-                                        asyncScroll = true;
-                                        myPanel.animate({ scrollTop: magnetsGroupFirstPixel - 10 }, 700);
-                                        setTimeout(function () {
-                                            asyncScroll = false;
-                                        }, 750);
-                                    }
-                                }, timeout);
-                            }
-                        }
-                    });
-
-                    
-                });
-                
-            } else {
-                console.log("keine markierung");
-            }
-            //console.log($('.CodeMirror-linkedLines'));
-            //console.log(cm.lineInfo(n).gutterMarkers);
-            
-        });
-      */
-        
-        
         $(ProjectManager).on("projectOpen", function () {
             setTimeout(function () {
                 _projectClosed = false;
@@ -1311,6 +1252,10 @@ define(function (require, exports, module) {
             }, function (err) {console.log(err); });
         });
         
+        $('body').delegate('#missionControl .controls a.edit', 'click', function () {
+            missionControl.toggleEditMode();
+        });
+        
         $('body').delegate('#missionControl .controls a.zoomin', 'click', function () {
             missionControl.zoomIn();
         });
@@ -1319,8 +1264,10 @@ define(function (require, exports, module) {
             missionControl.zoomOut();
         });
 
-        $('body').delegate('.saveSketch', 'click', function () {
-            save();
+        $('body').delegate('.redraw', 'click', function () {
+            console.log("redraw");
+            _activeSketchingArea.stage = createStage('overlay-' + _activeSketchingArea.id, myPanel.width(), _activeSketchingArea.height, _activeSketchingArea.fullPath, _activeSketchingArea.filename);
+            _activeSketchingArea.stage.draw();
         });
         /*
         $('body').delegate('.overlay .kineticjs-content', 'mousemove mousedown mouseup mouseleave hover', function (e) {

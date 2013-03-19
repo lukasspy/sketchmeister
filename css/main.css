@@ -89,6 +89,11 @@
     background: transparent url('../img/add.png') bottom right no-repeat;
 }
 
+#missionControl .controls a.edit {
+    background: transparent url('../img/edit.png') bottom right no-repeat;
+}
+
+
 #missionControl .controls a.zoomin {
     background: transparent url('../img/zoomin.png') bottom right no-repeat;
 }

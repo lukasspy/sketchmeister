@@ -104,9 +104,9 @@ function hideMagnets(group) {
     }
 }
 
-function addMissionControlMarker(fullPath, connection, id) {
+function addMissionControlMarker(connection, id) {
     //_activeEditor._codeMirror.addLineClass(connection.start.line, 'text', 'linkedLine');
-    _activeEditor._codeMirror.options.gutters.push("magnet-" + id);
+    EditorManager.getCurrentFullEditor()._codeMirror.options.gutters.push("magnet-" + id);
     var lines = connection.end.line - connection.start.line;
     var i;
     for (i = 0; i <= lines; i++) {
@@ -115,7 +115,7 @@ function addMissionControlMarker(fullPath, connection, id) {
         element.className = "CodeMirror-linkedMissionControlLines magnet-" + id;
         element.name = id;
         //element.id = "magnet-" + id;
-        _activeEditor._codeMirror.setGutterMarker(line, "magnet-" + id, element);
+        EditorManager.getCurrentFullEditor()._codeMirror.setGutterMarker(line, "magnet-" + id, element);
         //console.log(_activeEditor._codeMirror.lineInfo(line));
     }
 }
@@ -627,7 +627,6 @@ function addListenersToMissionControlAnchor(anchor, group) {
     
     anchor.on('dragmove', function () {
         update(this);
-        
         this.getLayer().draw();
     });
 
@@ -787,7 +786,7 @@ function whereIsThePointInRelationToTwoOtherPoints(point, from, to) {
     }
 }
 
-function recalculateStartAndEndOfConnection(magnet, cm, change) {
+function recalculateStartAndEndOfConnection(magnet, cm, change, thisIsAMissionControlMagnet) {
     var connection = JSON.parse(magnet.attrs.connection);
     
     var indexFrom = cm.doc.indexFromPos(change.from);
@@ -844,17 +843,23 @@ function recalculateStartAndEndOfConnection(magnet, cm, change) {
             startIs = whereIsThePointInRelationToTwoOtherPoints(indexStart, indexFrom, indexTo);
             if (startIs !== 0) { // after or before, but not inside ... if inside, do nothing else
                 if (startIs === 1) { // after
-                    connection.start.line = connection.start.line + moreThanOneLineWasInserted;
                     if (change.to.line === connection.start.line) {
                         connection.start.ch = connection.start.ch + change.text[change.text.length - 1].length;
                     }
+                    connection.start.line = connection.start.line + moreThanOneLineWasInserted;
                 }
                 if (change.from.line === connection.end.line) {
                     connection.end.ch = connection.end.ch + change.text[change.text.length - 1].length;
                 }
             }
             removeMarker(magnet._id);
-            addMarker(connection, magnet._id);
+            if (thisIsAMissionControlMagnet) {
+                if (DocumentManager.getCurrentDocument().file.fullPath === magnet.attrs.fullPath) {
+                    addMissionControlMarker(connection, magnet._id);
+                }    
+            } else {
+                addMarker(connection, magnet._id);
+            }
         }
     }
     return JSON.stringify(connection);
