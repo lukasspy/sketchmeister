@@ -159,7 +159,7 @@ function unhighlightMissionControl(magnet) {
         scale: {x: 1.0,
                y: 1.0},
         duration: 0.2
-    });  
+    });
 }
 
 function highlight(magnet) {
@@ -181,7 +181,7 @@ function unhighlight(magnet) {
         scale: {x: 1.0,
                y: 1.0},
         duration: 0.2
-    });  
+    });
 }
 
 function addListenersToMagnet(magnet, group) {
@@ -357,15 +357,16 @@ function addListenersToMissionControlMagnet(magnet, group) {
                 var connection = JSON.parse(this.attrs.connection);
                 var documentToOpen = DocumentManager.getDocumentForPath(this.attrs.fullPath);
                 var thismagnet = this;
+                highlightMissionControl(this);
                 documentToOpen.then(
                     function (object) {
                         DocumentManager.setCurrentDocument(object);
                         _activeEditor = EditorManager.getCurrentFullEditor();
-                        missionControl.toggle();
                         $(".magnet-" + thismagnet._id).addClass("selectionLinkFromMissionControl");
                         activeMarker[thismagnet._id] = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLinkFromMissionControl'});
-                        highlightMissionControl(thismagnet);
-                         
+                        setTimeout(function () {
+                            missionControl.toggle();
+                        }, 300);
                     },
                     function (error) {
                     // saving the object failed.
