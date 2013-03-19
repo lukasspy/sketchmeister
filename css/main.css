@@ -87,12 +87,16 @@
 
 #missionControl .controls a.add {
     background: transparent url('../img/add.png') bottom right no-repeat;
+    margin-right: 15px;
 }
 
 #missionControl .controls a.edit {
     background: transparent url('../img/edit.png') bottom right no-repeat;
 }
 
+#missionControl .controls a.edit.active {
+    background: transparent url('../img/edit-active.png') bottom right no-repeat;
+}
 
 #missionControl .controls a.zoomin {
     background: transparent url('../img/zoomin.png') bottom right no-repeat;

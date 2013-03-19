@@ -219,7 +219,6 @@ function addListenersToMagnet(magnet, group) {
             if (!this.clicked) {
                 if (offscreenLocation) {
                     asyncScroll = true;
-                    var scrollPos = _activeEditor.getScrollPos();
                     var lineHeight = _activeEditor._codeMirror.defaultTextHeight();
                     var editorHeight = $(_activeEditor.getScrollerElement()).height();
                     var pos;
@@ -271,11 +270,6 @@ function addListenersToMagnet(magnet, group) {
         document.body.style.cursor = "pointer";
         //highlight(this);
         // Save the current selection or position of cursor to restore after mouseleave
-        if (_activeEditor.hasSelection()) {
-            selection = _activeEditor.getSelection();
-        } else {
-            position = _activeEditor.getCursorPos();
-        }
         var connection = JSON.parse(this.attrs.connection);
         if (!this.clicked) {
             activeHoverMarker[this._id] = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLink2'});
@@ -358,43 +352,37 @@ function addListenersToMissionControlMagnet(magnet, group) {
                 var documentToOpen = DocumentManager.getDocumentForPath(this.attrs.fullPath);
                 var thismagnet = this;
                 highlightMissionControl(this);
+                missionControl.toggle();
                 documentToOpen.then(
                     function (object) {
                         DocumentManager.setCurrentDocument(object);
                         _activeEditor = EditorManager.getCurrentFullEditor();
-                        $(".magnet-" + thismagnet._id).addClass("selectionLinkFromMissionControl");
-                        activeMarker[thismagnet._id] = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLinkFromMissionControl'});
+                        var scrollPos = _activeEditor.getScrollPos();
+                        var lineHeight = _activeEditor._codeMirror.defaultTextHeight();
+                        var firstVisibleLine = Math.ceil(scrollPos.y / lineHeight) - 1;
+                        var editorHeight = $(_activeEditor.getScrollerElement()).height();
+                        var lastVisibleLine = Math.floor((scrollPos.y + editorHeight) / lineHeight) - 1;
+                        var timeout = 0;
+                        if (connection.start.line < firstVisibleLine) {
+                            timeout = 700;
+                            pos = connection.start.line * lineHeight;
+                            $(_activeEditor.getScrollerElement()).animate({ scrollTop: pos }, timeout);
+                            
+                        } else if (connection.end.line > lastVisibleLine) {
+                            timeout = 700;
+                            pos = connection.end.line * lineHeight;
+                            $(_activeEditor.getScrollerElement()).animate({ scrollTop: pos - editorHeight + 3 * lineHeight }, timeout);
+                        }
                         setTimeout(function () {
-                            missionControl.toggle();
-                        }, 300);
+                        $(".magnet-" + thismagnet._id).addClass("selectionLinkFromMissionControl");
+                            activeMarker[thismagnet._id] = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLinkFromMissionControl'});
+                        }, timeout);
                     },
                     function (error) {
                     // saving the object failed.
                     }
                 );
                 this.clicked = true;
-                if (offscreenLocation) {
-                    asyncScroll = true;
-                    var scrollPos = _activeEditor.getScrollPos();
-                    var lineHeight = _activeEditor._codeMirror.defaultTextHeight();
-                    var editorHeight = $(_activeEditor.getScrollerElement()).height();
-                    var pos;
-                    if (offscreenLocation === 'top') {
-                        pos = connection.start.line * lineHeight;
-                        $(_activeEditor.getScrollerElement()).animate({ scrollTop: pos }, 700);
-                        
-                        $('#hightlightTop').remove();
-                    } else if (offscreenLocation === 'bottom') {
-                        pos = connection.end.line * lineHeight;
-                        $(_activeEditor.getScrollerElement()).animate({ scrollTop: pos - editorHeight + 3 * lineHeight }, 700);
-                        $('#hightlightBottom').remove();
-                    }
-                    selection = connection;
-                } else {
-                    asyncScroll = false;
-                }
-                
-                
             } else {
                 $(".magnet-" + this._id).removeClass("selectionLinkFromMissionControl");
                 activeMarker[this._id].clear();
@@ -627,7 +615,7 @@ function addListenersToMissionControlAnchor(anchor, group) {
     
     anchor.on('dragmove', function () {
         update(this);
-        this.getLayer().draw();
+        stage.draw();
     });
 
     if (anchor.attrs.name === "topLeft") {
@@ -648,10 +636,10 @@ function addListenersToMissionControlAnchor(anchor, group) {
             if (_activeEditor.hasSelection()) {
                 var connection = _activeEditor.getSelection();
                 var id = addMissionControlMagnet(group, 40, 40, JSON.stringify(connection), DocumentManager.getCurrentDocument().file.fullPath);
-                addMissionControlMarker(anchor.attrs.fullPath, connection, id);
+                addMissionControlMarker(connection, id);
                 marker = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLink'});
                 _activeEditor.setCursorPos(connection.start);
-                layer.draw();
+                stage.draw();
             }
         });
     } else {
@@ -671,7 +659,7 @@ function addListenersToMissionControlAnchor(anchor, group) {
         updateMagnets(this, oldX, oldY);
         showMagnets(group);
         group.setDraggable(true);
-        layer.draw();
+        stage.draw();
     });
     // add hover styling
     if (anchor.attrs.name === "topLeft") {
@@ -856,7 +844,7 @@ function recalculateStartAndEndOfConnection(magnet, cm, change, thisIsAMissionCo
             if (thisIsAMissionControlMagnet) {
                 if (DocumentManager.getCurrentDocument().file.fullPath === magnet.attrs.fullPath) {
                     addMissionControlMarker(connection, magnet._id);
-                }    
+                }
             } else {
                 addMarker(connection, magnet._id);
             }

@@ -224,6 +224,7 @@ define(function (require, exports, module) {
             stage = Kinetic.Node.create(missionControlAsJSON.html(), container);
             stage.setWidth(width);
             stage.setHeight(height);
+            stage.attrs.draggable = true;
             var groups = stage.get(".group");
             
             var images = stage.get(".image");
@@ -299,7 +300,8 @@ define(function (require, exports, module) {
             stage = new Kinetic.Stage({
                 container: container,
                 width: width,
-                height: height
+                height: height,
+                draggable: true
             });
         }
         return stage;
@@ -907,24 +909,48 @@ define(function (require, exports, module) {
         $xml.find("project").children("missioncontrol").remove();
         $xml.find("project").append("<missioncontrol>" + missionControlAsJSON + "</missioncontrol>");
     }
-    
+    // <a href="#" class="zoomin"></a><a href="#" class="zoomout"></a>
     function MissionControl() {
-        this.overlay = $('<div id="missionControl"><div class="left controls"><a href="#" class="add"></a><a href="#" class="edit"></a></div><div class="right controls"><a href="#" class="zoomin"></a><a href="#" class="zoomout"></a></div></div>');
+        this.overlay = $('<div id="missionControl"><div class="left controls"><a href="#" class="add"></a></div><div class="right controls"><a href="#" class="edit"></a></div></div>');
         this.active = false;
         this.editMode = false;
         this.stage = null;
         this.imageLayering = null;
+        this.scale = 1;
+        this.zoomFactor = 1.02;
+        this.origin = {
+            x: 0,
+            y: 0
+        };
     }
     
     MissionControl.prototype.init = function () {
         this.overlay.appendTo("body");
-        this.stage = createStageForMissionControl("missionControl", $(".content").width(), $(".content").height());
+        this.stage = createStageForMissionControl("missionControl", $("body").width(), $("body").height());
+        console.log(this.stage.getScale());
         this.imageLayering = new Kinetic.Layer({id: 'images'});
         this.stage.add(this.imageLayering);
         $('#missionControl .kineticjs-content').css('z-index', '21');
-        $("#missionControl").css("margin-left", $("#sidebar").width());
-        this.editMode = true;
-        this.toggleEditMode();
+        //$("#missionControl").css("margin-left", $("#sidebar").width());
+        this.deactivateEditMode();
+    };
+    
+    MissionControl.prototype.zoom = function (event) {
+        console.log(this.stage);
+        event.preventDefault();
+        var evt = event.originalEvent,
+            mx = evt.clientX, /* - canvas.offsetLeft */
+            my = evt.clientY; /* - canvas.offsetTop */
+        var zoom = (this.zoomFactor - (evt.wheelDelta < 0 ? 0.04 : 0));
+        var newscale = this.scale * zoom;
+        this.origin.x = mx / this.scale + this.origin.x - mx / newscale;
+        this.origin.y = my / this.scale + this.origin.y - my / newscale;
+        
+        var scale = this.stage.getScale();
+        this.stage.setOffset(this.origin.x, this.origin.y);
+        this.stage.setScale(newscale);
+        this.stage.draw();
+        this.scale *= zoom;
     };
     
     MissionControl.prototype.zoomIn = function () {
@@ -954,64 +980,78 @@ define(function (require, exports, module) {
         }
     };
     
-    MissionControl.prototype.toggleEditMode = function () {
+    MissionControl.prototype.deactivateEditMode = function () {
         var anchors, magnets, groups;
-        if (this.editMode) {
-            this.editMode = false;
-            anchors = this.stage.get('.topLeft');
-            $.each(anchors, function (index, anchor) {
-                anchor.hide();
-            });
-            anchors = this.stage.get('.topRight');
-            $.each(anchors, function (index, anchor) {
-                anchor.hide();
-            });
-            anchors = this.stage.get('.bottomLeft');
-            $.each(anchors, function (index, anchor) {
-                anchor.hide();
-            });
-            anchors = this.stage.get('.bottomRight');
-            $.each(anchors, function (index, anchor) {
-                anchor.hide();
-            });
-            
-            magnets = this.stage.get(".magnet");
-            $.each(magnets, function (key, magnet) {
-                magnet.setDraggable(false);
-            });
-            groups = this.stage.get(".group");
-            $.each(groups, function (key, group) {
-                group.setDraggable(false);
-            });
-        } else {
-            this.editMode = true;
-            anchors = this.stage.get('.topLeft');
-            $.each(anchors, function (index, anchor) {
-                anchor.show();
-            });
-            anchors = this.stage.get('.topRight');
-            $.each(anchors, function (index, anchor) {
-                anchor.show();
-            });
-            anchors = this.stage.get('.bottomLeft');
-            $.each(anchors, function (index, anchor) {
-                anchor.show();
-            });
-            anchors = this.stage.get('.bottomRight');
-            $.each(anchors, function (index, anchor) {
-                anchor.show();
-            });
-            
-            magnets = this.stage.get(".magnet");
-            $.each(magnets, function (key, magnet) {
-                magnet.setDraggable(true);
-            });
-            groups = this.stage.get(".group");
-            $.each(groups, function (key, group) {
-                group.setDraggable(true);
-            });
-        }
+        $("#missionControl .controls a.edit").removeClass("active");
+        this.editMode = false;
+        this.stage.setDraggable(true);
+        anchors = this.stage.get('.topLeft');
+        $.each(anchors, function (index, anchor) {
+            anchor.hide();
+        });
+        anchors = this.stage.get('.topRight');
+        $.each(anchors, function (index, anchor) {
+            anchor.hide();
+        });
+        anchors = this.stage.get('.bottomLeft');
+        $.each(anchors, function (index, anchor) {
+            anchor.hide();
+        });
+        anchors = this.stage.get('.bottomRight');
+        $.each(anchors, function (index, anchor) {
+            anchor.hide();
+        });
+        
+        magnets = this.stage.get(".magnet");
+        $.each(magnets, function (key, magnet) {
+            magnet.setDraggable(false);
+        });
+        groups = this.stage.get(".group");
+        $.each(groups, function (key, group) {
+            group.setDraggable(false);
+        });
         this.stage.draw();
+    };
+    
+    MissionControl.prototype.activateEditMode = function () {
+        var anchors, magnets, groups;
+        $("#missionControl .controls a.edit").addClass("active");
+        this.editMode = true;
+        this.stage.setDraggable(false);
+        anchors = this.stage.get('.topLeft');
+        $.each(anchors, function (index, anchor) {
+            anchor.show();
+        });
+        anchors = this.stage.get('.topRight');
+        $.each(anchors, function (index, anchor) {
+            anchor.show();
+        });
+        anchors = this.stage.get('.bottomLeft');
+        $.each(anchors, function (index, anchor) {
+            anchor.show();
+        });
+        anchors = this.stage.get('.bottomRight');
+        $.each(anchors, function (index, anchor) {
+            anchor.show();
+        });
+        
+        magnets = this.stage.get(".magnet");
+        $.each(magnets, function (key, magnet) {
+            magnet.setDraggable(true);
+        });
+        groups = this.stage.get(".group");
+        $.each(groups, function (key, group) {
+            group.setDraggable(true);
+        });
+        this.stage.draw();
+    };
+    
+    MissionControl.prototype.toggleEditMode = function () {
+        if (this.editMode) {
+            this.deactivateEditMode();
+        } else {
+            this.activateEditMode();
+        }
     };
     
     MissionControl.prototype.addImage = function (imageToAdd) {
@@ -1084,6 +1124,7 @@ define(function (require, exports, module) {
             $('#tempImage').remove();
             thisMissionControl.stage.draw();
         });
+        this.activateEditMode();
     
     };
     
@@ -1166,7 +1207,7 @@ define(function (require, exports, module) {
         }
         //Resizer.toggle(myPanel);
     }
-
+    
     function _addHandlers() {
         $(DocumentManager).on("currentDocumentChange", function () {
             if (!_projectClosed) {
@@ -1250,6 +1291,11 @@ define(function (require, exports, module) {
                     missionControl.addImage(image);
                 });
             }, function (err) {console.log(err); });
+        });
+        
+        $('body').delegate('#missionControl', 'mousewheel', function (event) {
+            
+            missionControl.zoom(event);
         });
         
         $('body').delegate('#missionControl .controls a.edit', 'click', function () {
