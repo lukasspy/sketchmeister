@@ -1,6 +1,7 @@
 /*jslint vars: true, plusplus: true, devel: true, nomen: true, regexp: true, indent: 4, maxerr: 50, browser: true*/
 /*global define, $, brackets, window, CodeMirror, document, Kinetic, addImageToStage, _activeEditor, asyncScroll, _activeLayer, activeMarker, allAnchors, missionControl */
-var DocumentManager = brackets.getModule("document/DocumentManager");
+var DocumentManager = brackets.getModule("document/DocumentManager"),
+    EditorManager = brackets.getModule("editor/EditorManager");
 var sketchIconActive = require.toUrl('./sketch_button_on.png');
 var sketchIconDeactive = require.toUrl('./sketch_button_off.png');
 
@@ -139,6 +140,28 @@ function removeMarker(id) {
     _activeEditor._codeMirror.clearGutter("magnet-" + id);
 }
 
+function highlightMissionControl(magnet) {
+    magnet.setStrokeWidth(2);
+    magnet.setFill('rgba(0, 27, 138, 0.8)');
+    magnet.setStroke('rgba(0, 27, 138, 1.0)');
+    magnet.transitionTo({
+        scale: {x: 1.8,
+               y: 1.8},
+        duration: 0.2
+    });
+}
+
+function unhighlightMissionControl(magnet) {
+    magnet.setStrokeWidth(1);
+    magnet.setFill('rgba(251,167,13,0.5)');
+    magnet.setStroke('rgba(251,167,13,1.0)');
+    magnet.transitionTo({
+        scale: {x: 1.0,
+               y: 1.0},
+        duration: 0.2
+    });  
+}
+
 function highlight(magnet) {
     magnet.setStrokeWidth(2);
     magnet.setFill('rgba(116, 138, 0, 0.8)');
@@ -158,8 +181,7 @@ function unhighlight(magnet) {
         scale: {x: 1.0,
                y: 1.0},
         duration: 0.2
-    });
-    
+    });  
 }
 
 function addListenersToMagnet(magnet, group) {
@@ -311,7 +333,6 @@ function addListenersToMissionControlMagnet(magnet, group) {
     var deleted = false;
     magnet.on('mousedown', function () {
         group.setDraggable(false);
-        asyncScroll = true;
     });
 
     magnet.on('mouseup', function (e) {
@@ -331,19 +352,26 @@ function addListenersToMissionControlMagnet(magnet, group) {
             }
         } else {
          // left mousebutton
-            var connection = JSON.parse(this.attrs.connection);
-            var documentToOpen = DocumentManager.getDocumentForPath(this.attrs.fullPath);
-            documentToOpen.then(
-                function (object) {
-                    DocumentManager.setCurrentDocument(object);
-                    missionControl.toggle();
-                },
-                function (error) {
-                // saving the object failed.
-                }
-            );
+            
             if (!this.clicked) {
-                
+                var connection = JSON.parse(this.attrs.connection);
+                var documentToOpen = DocumentManager.getDocumentForPath(this.attrs.fullPath);
+                var thismagnet = this;
+                documentToOpen.then(
+                    function (object) {
+                        DocumentManager.setCurrentDocument(object);
+                        _activeEditor = EditorManager.getCurrentFullEditor();
+                        missionControl.toggle();
+                        $(".magnet-" + thismagnet._id).addClass("selectionLinkFromMissionControl");
+                        activeMarker[thismagnet._id] = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLinkFromMissionControl'});
+                        highlightMissionControl(thismagnet);
+                         
+                    },
+                    function (error) {
+                    // saving the object failed.
+                    }
+                );
+                this.clicked = true;
                 if (offscreenLocation) {
                     asyncScroll = true;
                     var scrollPos = _activeEditor.getScrollPos();
@@ -365,87 +393,26 @@ function addListenersToMissionControlMagnet(magnet, group) {
                     asyncScroll = false;
                 }
                 
-                $(".magnet-" + this._id).addClass("selectionLink");
-                activeHoverMarker[this._id].clear();
-                activeMarker[this._id] = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLink'});
-                highlight(this);
-                this.clicked = true;
+                
             } else {
-                $(".magnet-" + this._id).removeClass("selectionLink");
+                $(".magnet-" + this._id).removeClass("selectionLinkFromMissionControl");
                 activeMarker[this._id].clear();
-                activeHoverMarker[this._id] = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLink2'});
-                unhighlight(this);
+                unhighlightMissionControl(this);
                 this.clicked = false;
-                asyncScroll = true;
-                $(_activeEditor.getScrollerElement()).animate({ scrollTop: $("#myPanel").scrollTop() }, 700);
-                setTimeout(function () {
-                    asyncScroll = false;
-                }, 750);
             }
         }
     });
 
     magnet.on('mouseover', function () {
-        // get the y-scroll position of editor and divide by line-height to get firstVisibleLine
-        var scrollPos = _activeEditor.getScrollPos();
-        var lineHeight = _activeEditor._codeMirror.defaultTextHeight();
-        var firstVisibleLine = Math.ceil(scrollPos.y / lineHeight) - 1;
-        var editorHeight = $(_activeEditor.getScrollerElement()).height();
-        var lastVisibleLine = Math.floor((scrollPos.y + editorHeight) / lineHeight) - 1;
-
         document.body.style.cursor = "pointer";
-        //highlight(this);
-        // Save the current selection or position of cursor to restore after mouseleave
-        if (_activeEditor.hasSelection()) {
-            selection = _activeEditor.getSelection();
-        } else {
-            position = _activeEditor.getCursorPos();
-        }
-        var connection = JSON.parse(this.attrs.connection);
-        if (!this.clicked) {
-            activeHoverMarker[this._id] = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLink2'});
-        }
-        
-        //$(".magnet-" + this._id).addClass("selectionLink2");
-        if (connection.start.line < firstVisibleLine) {
-            $('#editor-holder').append('<div id="hightlightTop"></div>');
-            offscreenLocation = 'top';
-        } else if (connection.end.line > lastVisibleLine) {
-            $('#editor-holder').append('<div id="hightlightBottom"></div>');
-            offscreenLocation = 'bottom';
-        }
     });
     magnet.on('dragend', function () {
-        if (_activeLayer === "edit") {
-            group.setDraggable(true);
-            group.getLayer().draw();
-        }
+        group.setDraggable(true);
+        group.getLayer().draw();
     });
     magnet.on('mouseleave', function () {
-        if (!deleted) {
-            if (!this.clicked) {
-                if (_activeLayer === "edit") {
-                    group.setDraggable(true);
-                }
-                document.body.style.cursor = "default";
-                this.setStrokeWidth(1);
-                this.setFill('rgba(251,167,13,0.5)');
-                this.setStroke('rgba(251,167,13,1.0)');
-                this.getLayer().draw();
-    
-                $('#hightlightTop').remove();
-                $('#hightlightBottom').remove();
-                offscreenLocation = null;
-                if (activeHoverMarker[this._id]) {
-                    activeHoverMarker[this._id].clear();
-                    //delete (activeHoverMarker[this._id]);
-                }
-                
-                $(".magnet-" + this._id).removeClass("selectionLink");
-                selection = null;
-                position = null;
-            }
-        }
+        document.body.style.cursor = "default";
+        group.setDraggable(true);
     });
     
 }

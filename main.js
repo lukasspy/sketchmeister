@@ -1,5 +1,5 @@
 /*jslint vars: true, plusplus: true, devel: true, nomen: true, regexp: true, indent: 4, maxerr: 50, browser: true*/
-/*global define, $, brackets, window, CodeMirror, document, Kinetic, addImageToStage, addAnchor, addMissionControlAnchor, addMissionControlMarker, allAnchors, addListenersToAnchor, addListenersToMissionControlAnchor, addDeleteAnchor, showAnchors, hideAnchors, addListenersToMagnet, addListenersToMissionControlMagnet, addMarker, removeMarker, highlight, unhighlight, recalculateStartAndEndOfConnection */
+/*global define, $, brackets, window, CodeMirror, document, Kinetic, addImageToStage, addAnchor, addMissionControlAnchor, unhighlightMissionControl, highlightMissionControl, addMissionControlMarker, allAnchors, addListenersToAnchor, addListenersToMissionControlAnchor, addDeleteAnchor, showAnchors, hideAnchors, addListenersToMagnet, addListenersToMissionControlMagnet, addMarker, removeMarker, highlight, unhighlight, recalculateStartAndEndOfConnection */
 
 var xmlFilename = "sketchmeister.xml";
 var panelSize = 2;
@@ -236,7 +236,7 @@ define(function (require, exports, module) {
                 $('<img src="' + image.attrs.src + '" id="tempImage" class="visibility: hidden"/>').load(function () {
                     
                     var group = groups[key];
-                    
+                    group.setDraggable(true);
                     var anchors = group.get(".topLeft");
                     var imageObj = new Image();
                     imageObj.src = deleteIcon;
@@ -579,33 +579,24 @@ define(function (require, exports, module) {
     }
 
     function currentDocumentChanged() {
+        
+        console.log("docchanged");
         //getCurrentDocument..
         // set the current Full Editor as _activeEditor
         _activeEditor = EditorManager.getCurrentFullEditor();
         
         
-        var gutter = _activeEditor._codeMirror.getWrapperElement().getElementsByClassName("CodeMirror-gutter")[0];
-
-        // if _activeEditor gets scrolled then also scroll the sketching overlay
-        /*
-        $(_activeEditor.getScrollerElement()).on("scroll.editor", _scroll);
-        $(_activeEditor.getScrollerElement()).on("scrollstart", function () {
-            ignoreScrollEventsFromEditor = true;
-        });
-        */
+        //var gutter = _activeEditor._codeMirror.getWrapperElement().getElementsByClassName("CodeMirror-gutter")[0];
         $(_activeEditor).on("scroll", _scroll);
-        
         myPanel.on("scroll", _scrollEditor);
-        /*myPanel.on("scrollstart", function () {
-            ignoreScrollEventsFromPanel = true;
-        });
-        myPanel.on("scrollstop", function () {
-            ignoreScrollEventsFromPanel = false;
-        });
-        */
+
         // set the current Document as _activeDocument to get additional data of the file
         _activeDocument = DocumentManager.getCurrentDocument();
+        
+        
+        
         var _activeFullPath = DocumentManager.getCurrentDocument().file.fullPath;
+        
         
         var magnets = missionControl.stage.get(".magnet");
         $.each(magnets, function (key, magnet) {
@@ -613,7 +604,7 @@ define(function (require, exports, module) {
                 addMissionControlMarker(magnet.attrs.fullPath, JSON.parse(magnet.attrs.connection), magnet._id);
             }
         });
-
+    
         var _activeFilename = DocumentManager.getCurrentDocument().file.name;
         // go through all already opened sketchingAreas and check if opened file already has a sketchingArea
         var foundSketchingArea = -1;
@@ -658,7 +649,34 @@ define(function (require, exports, module) {
         
         //when document is changed the editor position was stored, so the panel needs to be synced on reentering
         myPanel.scrollTop(_activeEditor.getScrollPos().y);
-
+        
+        _activeEditor._codeMirror.on("gutterClick", function (cm, n) {
+            var lineInfo = cm.lineInfo(n);
+            if (lineInfo.gutterMarkers) {
+                var foundMagnetInNormalStage = 0;
+                $.each(lineInfo.gutterMarkers, function (key, value) {
+                    magnets = missionControl.stage.get(".magnet");
+                    $.each(magnets, function (pos, magnet) {
+                        if (magnet._id === value.name) {
+                            if (magnet.clicked) {
+                                unhighlightMissionControl(magnet);
+                                magnet.clicked = false;
+                                activeMarker[magnet._id].clear();
+                                $(".magnet-" + magnet._id).removeClass('selectionLinkFromMissionControl');
+                                delete (activeMarker[magnet._id]);
+                            } else {
+                                highlightMissionControl(magnet);
+                                magnet.clicked = true;
+                                $(".magnet-" + magnet._id).addClass("selectionLinkFromMissionControl");
+                                var connection = JSON.parse(magnet.attrs.connection);
+                                activeMarker[magnet._id] = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLinkFromMissionControl'});
+                            }
+                        }
+                    });
+                });
+            }
+        });
+        
     }
 
     function deleteSketchingArea(id) {
@@ -1006,12 +1024,13 @@ define(function (require, exports, module) {
         });
         
         EditorManager.getCurrentFullEditor()._codeMirror.on("gutterClick", function (cm, n) {
+            console.log("gutterclicked");
             var lineInfo = cm.lineInfo(n);
-            
+            console.log(lineInfo);
             if (lineInfo.gutterMarkers) {
                 var foundMagnetInNormalStage = 0;
                 $.each(lineInfo.gutterMarkers, function (key, value) {
-                    //console.log(_activeStage);
+                    console.log(value);
                     var magnets = _activeStage.get(".magnet");
                     $.each(magnets, function (pos, magnet) {
                         if (magnet._id === value.name) {
@@ -1076,26 +1095,7 @@ define(function (require, exports, module) {
                         }
                     });
 
-                    if (foundMagnetInNormalStage < Object.keys(lineInfo.gutterMarkers).length) {
-                        magnets = missionControl.stage.get(".magnet");
-                        $.each(magnets, function (pos, magnet) {
-                            if (magnet._id === value.name) {
-                                if (magnet.clicked) {
-                                    unhighlight(magnet);
-                                    magnet.clicked = false;
-                                    activeMarker[magnet._id].clear();
-                                    $(".magnet-" + magnet._id).removeClass('selectionLinkFromMissionControl');
-                                    delete (activeMarker[magnet._id]);
-                                } else {
-                                    highlight(magnet);
-                                    magnet.clicked = true;
-                                    $(".magnet-" + magnet._id).addClass("selectionLinkFromMissionControl");
-                                    var connection = JSON.parse(magnet.attrs.connection);
-                                    activeMarker[magnet._id] = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLinkFromMissionControl'});
-                                }
-                            }
-                        });
-                    }
+                    
                 });
                 
             } else {
@@ -1349,6 +1349,7 @@ define(function (require, exports, module) {
     }
 
     AppInit.appReady(function () {
+        
         readXmlFileData(function () {
             _addMenuItems();
             _addToolbarIcon();
@@ -1356,11 +1357,10 @@ define(function (require, exports, module) {
             _addMyPanel();
             missionControl = new MissionControl();
             missionControl.init();
-            
             //initialization ... make stuff and hide everthing
             _toggleStatus();
             _toggleStatus();
-            
+            console.log(EditorManager.getCurrentFullEditor()._codeMirror);
         });
     });
 });
