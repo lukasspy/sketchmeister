@@ -13,7 +13,7 @@ var mouseOverPanel = false;
 var _sketchingAreaIdCounter = 0;
 var xmlData, $xml;
 
-var active = false;
+var active = true;
 var firstActivation = true;
 
 var _activeEditor = null;
@@ -41,7 +41,7 @@ define(function (require, exports, module) {
     var deleteIcon = require.toUrl('./img/delete-button.png');
     var addIcon = require.toUrl('./img/add-button.png');
 
-    
+    var start = true;
     var CommandManager = brackets.getModule("command/CommandManager"),
         ProjectManager = brackets.getModule("project/ProjectManager"),
         //EditorUtils = brackets.getModule("editor/EditorUtils"),
@@ -1198,11 +1198,10 @@ define(function (require, exports, module) {
             hideMyPanel();
         } else {
             setSizeOfMyPanel(panelSize);
-            _activate();
-            
-            currentDocumentChanged();
             myPanel.find("canvas").width(myPanel.width());
+            currentDocumentChanged();
             _activeSketchingArea.sketchArea.redraw();
+            _activate();
             showMyPanel();
         }
         //Resizer.toggle(myPanel);
@@ -1468,7 +1467,6 @@ define(function (require, exports, module) {
             missionControl = new MissionControl();
             missionControl.init();
             //initialization ... make stuff and hide everthing
-            _toggleStatus();
             _toggleStatus();
         });
     });
