@@ -107,16 +107,18 @@ function hideMagnets(group) {
 function addMissionControlMarker(connection, id) {
     //_activeEditor._codeMirror.addLineClass(connection.start.line, 'text', 'linkedLine');
     EditorManager.getCurrentFullEditor()._codeMirror.options.gutters.push("magnet-" + id);
-    var lines = connection.end.line - connection.start.line;
-    var i;
-    for (i = 0; i <= lines; i++) {
-        var line = connection.start.line + i;
-        var element = document.createElement('div');
-        element.className = "CodeMirror-linkedMissionControlLines magnet-" + id;
-        element.name = id;
-        //element.id = "magnet-" + id;
-        EditorManager.getCurrentFullEditor()._codeMirror.setGutterMarker(line, "magnet-" + id, element);
-        //console.log(_activeEditor._codeMirror.lineInfo(line));
+    if(connection.start.line > 0 && connection.end.line > 0) {
+        var lines = connection.end.line - connection.start.line;
+        var i;
+        for (i = 0; i <= lines; i++) {
+            var line = connection.start.line + i;
+            var element = document.createElement('div');
+            element.className = "CodeMirror-linkedMissionControlLines magnet-" + id;
+            element.name = id;
+            //element.id = "magnet-" + id;
+            EditorManager.getCurrentFullEditor()._codeMirror.setGutterMarker(line, "magnet-" + id, element);
+            //console.log(_activeEditor._codeMirror.lineInfo(line));
+        }
     }
 }
 
@@ -347,15 +349,18 @@ function addListenersToMissionControlMagnet(magnet, group) {
         } else {
          // left mousebutton
             
-            if (!this.clicked) {
-                var connection = JSON.parse(this.attrs.connection);
-                var documentToOpen = DocumentManager.getDocumentForPath(this.attrs.fullPath);
-                var thismagnet = this;
-                highlightMissionControl(this);
-                missionControl.toggle();
-                documentToOpen.then(
-                    function (object) {
-                        DocumentManager.setCurrentDocument(object);
+            //if (!this.clicked) {
+            var connection = JSON.parse(this.attrs.connection);
+            var documentToOpen = DocumentManager.getDocumentForPath(this.attrs.fullPath);
+            var thismagnet = this;
+            //highlightMissionControl(this);
+            this.clicked = true;
+            missionControl.toggle();
+            documentToOpen.then(
+                function (object) {
+                    DocumentManager.setCurrentDocument(object);
+                    DocumentManager.addToWorkingSet(object.file);
+                    if (connection.start.line > 0 && connection.end.line > 0) {
                         _activeEditor = EditorManager.getCurrentFullEditor();
                         var scrollPos = _activeEditor.getScrollPos();
                         var lineHeight = _activeEditor._codeMirror.defaultTextHeight();
@@ -377,18 +382,20 @@ function addListenersToMissionControlMagnet(magnet, group) {
                         $(".magnet-" + thismagnet._id).addClass("selectionLinkFromMissionControl");
                             activeMarker[thismagnet._id] = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLinkFromMissionControl'});
                         }, timeout);
-                    },
-                    function (error) {
-                    // saving the object failed.
                     }
-                );
-                this.clicked = true;
+                },
+                function (error) {
+                // saving the object failed.
+                }
+            );
+            /*    
             } else {
                 $(".magnet-" + this._id).removeClass("selectionLinkFromMissionControl");
                 activeMarker[this._id].clear();
                 unhighlightMissionControl(this);
                 this.clicked = false;
             }
+            */
         }
     });
 
@@ -437,7 +444,7 @@ function addMissionControlMagnet(group, x, y, connection, fullPath) {
         stroke: 'rgba(251,167,13,1)',
         fill: 'rgba(251,167,13,0.5)',
         strokeWidth: 1,
-        radius: 8,
+        radius: 12,
         name: 'magnet',
         draggable: true,
         dragOnTop: true,
