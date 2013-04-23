@@ -508,7 +508,9 @@ function addListenersToAnchor(anchor, group) {
                 deleted = true;
                 $.each(group.get(".magnet"), function (pos, magnet) {
                     removeMarker(magnet._id);
-                    activeMarker[this._id].clear();
+                    if (activeMarker[this._id]) {
+                        activeMarker[this._id].clear();
+                    }
                 });
                 group.destroy();
                 stage.draw();

@@ -28,6 +28,8 @@ var _projectClosed = false;
 var activeMarker = [];
 var allPaintingActions = [];
 
+var addedListeners = [];
+
 
 define(function (require, exports, module) {
     "use strict";
@@ -270,6 +272,12 @@ define(function (require, exports, module) {
                     $.each(magnets, function (key, magnet) {
                         //magnet.setDraggable(false);
                         //console.log(magnet._id);
+                        unhighlight(magnet);
+                        var JSONconnection = JSON.parse(magnet.attrs.connection);
+                        if (JSONconnection.start.line === 0 && JSONconnection.end.line === 0) {
+                            magnet.setStroke('rgba(55, 101, 104, 1)');
+                            magnet.setFill('rgba(55, 101, 104, 0.5)');
+                        }
                         magnet.setRadius(12);
                         magnet.attrs.clicked = false;
                         addListenersToMissionControlMagnet(magnet, group);
@@ -588,8 +596,145 @@ define(function (require, exports, module) {
             return 0; //inside
         }
     }
+    
+    function addListenersToEditor(editor, fullPath, initialize) {
+        if (!initialize) {
+            var listenersAlreadyAdded = false;
+            $.each(addedListeners, function (key, addedListener) {
+                if (addedListener === fullPath) {
+                    listenersAlreadyAdded = true;
+                    return false;
+                }
+            });
+            console.log("already added: " + listenersAlreadyAdded);
+            if (listenersAlreadyAdded) {
+                return false;
+            }
+        }
+        
+        addedListeners.push(fullPath);
+        editor._codeMirror.on("change", function (cm, change) {
+            var magnets = _activeStage.get(".magnet");
+            $.each(magnets, function (pos, magnet) {
+                var reCalculatedConnection = recalculateStartAndEndOfConnection(magnet, cm, change, 0);
+                if (reCalculatedConnection) {
+                    magnet.attrs.connection = reCalculatedConnection;
+                } else {
+                    magnet.destroy();
+                    _activeStage.draw();
+                }
+            });
+            
+            magnets = missionControl.stage.get(".magnet");
+            $.each(magnets, function (pos, magnet) {
+                var reCalculatedConnection = recalculateStartAndEndOfConnection(magnet, cm, change, 1);
+                if (reCalculatedConnection) {
+                    magnet.attrs.connection = reCalculatedConnection;
+                } else {
+                    magnet.destroy();
+                    _activeStage.draw();
+                }
+            });
+            
+        });
+        
+        editor._codeMirror.on("gutterClick", function (cm, n) {
+            var lineInfo = cm.lineInfo(n);
+            if (lineInfo.gutterMarkers) {
+                var foundMagnetInNormalStage = 0;
+                $.each(lineInfo.gutterMarkers, function (key, value) {
+                    var magnets = _activeStage.get(".magnet");
+                    $.each(magnets, function (pos, magnet) {
+                        if (magnet._id === value.name) {
+                            foundMagnetInNormalStage++;
+                            if (magnet.clicked) {
+                                // mark in text is set, so lets clear and delete the mark-reference
+                                unhighlight(magnet);
+                                magnet.clicked = false;
+                                activeMarker[magnet._id].clear();
+                                $(".magnet-" + magnet._id).removeClass('selectionLink');
+                                delete (activeMarker[magnet._id]);
+                                asyncScroll = true;
+                                myPanel.animate({ scrollTop: $(_activeEditor.getScrollerElement()).scrollTop() }, 700);
+                                setTimeout(function () {
+                                    asyncScroll = false;
+                                }, 750);
+                            } else {
+                                // no mark in text, so lets get the magnet and mark corresponding text
+                                //console.log(magnet);
+                                var editorHeight = $(_activeEditor.getScrollerElement()).height();
+                                var editorFirstVisiblePixel = _activeEditor.getScrollPos().y;
+                                var editorLastVisiblePixel = editorFirstVisiblePixel + editorHeight;
+                                var groupHeight = magnet.getParent().get('.image')[0].getHeight();
+                                var magnetsGroupFirstPixel = magnet.getParent().getAbsolutePosition().y;
+                                var magnetsGroupLastPixel = magnet.getParent().getAbsolutePosition().y + groupHeight;
+                                var offscreenLocation = "visible";
+                                if (magnetsGroupLastPixel > editorLastVisiblePixel) {
+                                    offscreenLocation = "bottom";
+                                } else if (magnetsGroupFirstPixel < editorFirstVisiblePixel) {
+                                    offscreenLocation = "top";
+                                }
+                                
+                                var timeout = 0;
+                                if (!active) {
+                                    _toggleStatus();
+                                    //set the timeout: if panel has not been opened yet it takes a little time and then the animation would be missed
+                                    timeout = 100;
+                                }
+                                setTimeout(function () {
+                                    highlight(magnet);
+                                    magnet.clicked = true;
+                                    $(".magnet-" + magnet._id).addClass("selectionLink");
+                                    var connection = JSON.parse(magnet.attrs.connection);
+                                    //console.log(connection);
+                                    activeMarker[magnet._id] = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLink'});
+                                    if (offscreenLocation === "bottom") {
+                                        var scrollPos = magnetsGroupFirstPixel - (editorHeight - groupHeight);
+                                        asyncScroll = true;
+                                        myPanel.animate({ scrollTop: scrollPos }, 700);
+                                        setTimeout(function () {
+                                            asyncScroll = false;
+                                        }, 750);
+                                    } else if (offscreenLocation === "top") {
+                                        asyncScroll = true;
+                                        myPanel.animate({ scrollTop: magnetsGroupFirstPixel - 10 }, 700);
+                                        setTimeout(function () {
+                                            asyncScroll = false;
+                                        }, 750);
+                                    }
+                                }, timeout);
+                            }
+                        }
+                    });
 
-    function currentDocumentChanged() {
+                    if (foundMagnetInNormalStage < Object.keys(lineInfo.gutterMarkers).length) {
+                        magnets = missionControl.stage.get(".magnet");
+                        $.each(magnets, function (pos, magnet) {
+                            if (magnet._id === value.name) {
+                                if (magnet.clicked) {
+                                    unhighlightMissionControl(magnet);
+                                    magnet.clicked = false;
+                                    activeMarker[magnet._id].clear();
+                                    $(".magnet-" + magnet._id).removeClass('selectionLinkFromMissionControl');
+                                    delete (activeMarker[magnet._id]);
+                                } else {
+                                    highlightMissionControl(magnet, magnets);
+                                    magnet.clicked = true;
+                                    $(".magnet-" + magnet._id).addClass("selectionLinkFromMissionControl");
+                                    var connection = JSON.parse(magnet.attrs.connection);
+                                    activeMarker[magnet._id] = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLinkFromMissionControl'});
+                                }
+                            }
+                        });
+                    }
+                });
+            } else {
+                console.log("keine markierung");
+            }
+        });
+    }
+
+    function currentDocumentChanged(initialize) {
         //getCurrentDocument..
         // set the current Full Editor as _activeEditor
         _activeEditor = EditorManager.getCurrentFullEditor();
@@ -612,20 +757,34 @@ define(function (require, exports, module) {
         });
     
         var _activeFilename = DocumentManager.getCurrentDocument().file.name;
+        
+        if (initialize) {
+            console.log("init");
+            $.each(DocumentManager.getAllOpenDocuments(), function (key, openDocument) {
+                addListenersToEditor(openDocument._masterEditor, openDocument.file.fullPath, initialize);
+            });
+        } else {
+            console.log("not init");
+            addListenersToEditor(EditorManager.getCurrentFullEditor(), _activeFullPath, initialize);
+        }
+        console.log(addedListeners);
         // go through all already opened sketchingAreas and check if opened file already has a sketchingArea
         var foundSketchingArea = -1;
-        $.each(_documentSketchingAreas, function (key, sketchingArea) {
-            sketchingArea.active = false;
-            if (active) {
-                $('#overlay-' + sketchingArea.id).hide();
-            }
-            if (sketchingArea.fullPath === _activeFullPath) {
-                foundSketchingArea = key;
-            }
-        });
+        if (!initialize) {
+            
+            $.each(_documentSketchingAreas, function (key, sketchingArea) {
+                sketchingArea.active = false;
+                if (active) {
+                    $('#overlay-' + sketchingArea.id).hide();
+                }
+                if (sketchingArea.fullPath === _activeFullPath) {
+                    foundSketchingArea = key;
+                }
+            });
+        }
         
         // if sketchingArea is already loaded set it as active, else create a new sketchingArea and add it to Array of sketchingAreas
-        if (foundSketchingArea !== -1) {
+        if (!initialize && foundSketchingArea !== -1) {
             // sketchingArea was found and it is set
             _activeSketchingArea = _documentSketchingAreas[foundSketchingArea];
             _activeSketchingArea.active = true;
@@ -641,129 +800,10 @@ define(function (require, exports, module) {
             }
             //sketchingArea has been created and now the xml-file has to be checked if there are sketchingActions for that file
             loadSketchingActionsFromXmlToSketchingArea();
-            
-            EditorManager.getCurrentFullEditor()._codeMirror.on("change", function (cm, change) {
-                var magnets = _activeStage.get(".magnet");
-                $.each(magnets, function (pos, magnet) {
-                    var reCalculatedConnection = recalculateStartAndEndOfConnection(magnet, cm, change, 0);
-                    if (reCalculatedConnection) {
-                        magnet.attrs.connection = reCalculatedConnection;
-                    } else {
-                        magnet.destroy();
-                        _activeStage.draw();
-                    }
-                });
-                
-                magnets = missionControl.stage.get(".magnet");
-                $.each(magnets, function (pos, magnet) {
-                    var reCalculatedConnection = recalculateStartAndEndOfConnection(magnet, cm, change, 1);
-                    if (reCalculatedConnection) {
-                        magnet.attrs.connection = reCalculatedConnection;
-                    } else {
-                        magnet.destroy();
-                        _activeStage.draw();
-                    }
-                });
-                
-            });
-            
-            EditorManager.getCurrentFullEditor()._codeMirror.on("gutterClick", function (cm, n) {
-                var lineInfo = cm.lineInfo(n);
-                if (lineInfo.gutterMarkers) {
-                    var foundMagnetInNormalStage = 0;
-                    $.each(lineInfo.gutterMarkers, function (key, value) {
-                        var magnets = _activeStage.get(".magnet");
-                        $.each(magnets, function (pos, magnet) {
-                            if (magnet._id === value.name) {
-                                foundMagnetInNormalStage++;
-                                if (magnet.clicked) {
-                                    // mark in text is set, so lets clear and delete the mark-reference
-                                    unhighlight(magnet);
-                                    magnet.clicked = false;
-                                    activeMarker[magnet._id].clear();
-                                    $(".magnet-" + magnet._id).removeClass('selectionLink');
-                                    delete (activeMarker[magnet._id]);
-                                    asyncScroll = true;
-                                    myPanel.animate({ scrollTop: $(_activeEditor.getScrollerElement()).scrollTop() }, 700);
-                                    setTimeout(function () {
-                                        asyncScroll = false;
-                                    }, 750);
-                                } else {
-                                    // no mark in text, so lets get the magnet and mark corresponding text
-                                    //console.log(magnet);
-                                    var editorHeight = $(_activeEditor.getScrollerElement()).height();
-                                    var editorFirstVisiblePixel = _activeEditor.getScrollPos().y;
-                                    var editorLastVisiblePixel = editorFirstVisiblePixel + editorHeight;
-                                    var groupHeight = magnet.getParent().get('.image')[0].getHeight();
-                                    var magnetsGroupFirstPixel = magnet.getParent().getAbsolutePosition().y;
-                                    var magnetsGroupLastPixel = magnet.getParent().getAbsolutePosition().y + groupHeight;
-                                    var offscreenLocation = "visible";
-                                    if (magnetsGroupLastPixel > editorLastVisiblePixel) {
-                                        offscreenLocation = "bottom";
-                                    } else if (magnetsGroupFirstPixel < editorFirstVisiblePixel) {
-                                        offscreenLocation = "top";
-                                    }
-                                    
-                                    var timeout = 0;
-                                    if (!active) {
-                                        _toggleStatus();
-                                        //set the timeout: if panel has not been opened yet it takes a little time and then the animation would be missed
-                                        timeout = 100;
-                                    }
-                                    setTimeout(function () {
-                                        highlight(magnet);
-                                        magnet.clicked = true;
-                                        $(".magnet-" + magnet._id).addClass("selectionLink");
-                                        var connection = JSON.parse(magnet.attrs.connection);
-                                        //console.log(connection);
-                                        activeMarker[magnet._id] = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLink'});
-                                        if (offscreenLocation === "bottom") {
-                                            var scrollPos = magnetsGroupFirstPixel - (editorHeight - groupHeight);
-                                            asyncScroll = true;
-                                            myPanel.animate({ scrollTop: scrollPos }, 700);
-                                            setTimeout(function () {
-                                                asyncScroll = false;
-                                            }, 750);
-                                        } else if (offscreenLocation === "top") {
-                                            asyncScroll = true;
-                                            myPanel.animate({ scrollTop: magnetsGroupFirstPixel - 10 }, 700);
-                                            setTimeout(function () {
-                                                asyncScroll = false;
-                                            }, 750);
-                                        }
-                                    }, timeout);
-                                }
-                            }
-                        });
-    
-                        if (foundMagnetInNormalStage < Object.keys(lineInfo.gutterMarkers).length) {
-                            magnets = missionControl.stage.get(".magnet");
-                            $.each(magnets, function (pos, magnet) {
-                                if (magnet._id === value.name) {
-                                    if (magnet.clicked) {
-                                        unhighlightMissionControl(magnet);
-                                        magnet.clicked = false;
-                                        activeMarker[magnet._id].clear();
-                                        $(".magnet-" + magnet._id).removeClass('selectionLinkFromMissionControl');
-                                        delete (activeMarker[magnet._id]);
-                                    } else {
-                                        highlightMissionControl(magnet);
-                                        magnet.clicked = true;
-                                        $(".magnet-" + magnet._id).addClass("selectionLinkFromMissionControl");
-                                        var connection = JSON.parse(magnet.attrs.connection);
-                                        activeMarker[magnet._id] = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLinkFromMissionControl'});
-                                    }
-                                }
-                            });
-                        }
-                    });
-                    
-                
-                } else {
-                    console.log("keine markierung");
-                }
-            });
         }
+        
+        // adding listeners to newly created Editors or if init then add to all in the workingset
+        
         // set the active stage by referencing the stage of the active sketchingArea
         _activeStage = _activeSketchingArea.stage;
         _activeSketchingArea.sketchArea.redraw();
@@ -1203,7 +1243,7 @@ define(function (require, exports, module) {
             setSizeOfMyPanel(panelSize);
             _activate();
             
-            currentDocumentChanged();
+            currentDocumentChanged(false);
             myPanel.find("canvas").width(myPanel.width());
             _activeSketchingArea.sketchArea.redraw();
             showMyPanel();
@@ -1211,10 +1251,18 @@ define(function (require, exports, module) {
         //Resizer.toggle(myPanel);
     }
     
+    function init() {
+        setSizeOfMyPanel(panelSize);
+        showMyPanel();
+        myPanel.find("canvas").width(myPanel.width());
+        _activeSketchingArea.sketchArea.redraw();
+        hideMyPanel();
+    }
+    
     function _addHandlers() {
         $(DocumentManager).on("currentDocumentChange", function () {
             if (!_projectClosed) {
-                currentDocumentChanged();
+                currentDocumentChanged(false);
             }
             if (active) {
                 saveAll();
@@ -1470,9 +1518,10 @@ define(function (require, exports, module) {
             _addMyPanel();
             missionControl = new MissionControl();
             missionControl.init();
+            
+            currentDocumentChanged(true);
+            _toggleStatus();
             //initialization ... make stuff and hide everthing
-            _toggleStatus();
-            _toggleStatus();
         });
     });
 });
