@@ -1,5 +1,5 @@
 /*jslint vars: true, plusplus: true, devel: true, nomen: true, regexp: true, indent: 4, maxerr: 50, browser: true*/
-/*global define, $, brackets, window, CodeMirror, _toggleStatus, document, Kinetic, addImageToStage, addAnchor, addMissionControlAnchor, unhighlightMissionControl, highlightMissionControl, addMissionControlMarker, allAnchors, addListenersToAnchor, addListenersToMissionControlAnchor, addDeleteAnchor, showAnchors, hideAnchors, addListenersToMagnet, addListenersToMissionControlMagnet, addMarker, removeMarker, highlight, unhighlight, recalculateStartAndEndOfConnection */
+/*global define, $, brackets, window, CodeMirror, _toggleStatus, document, Kinetic, addImageToStage, addAnchor, addMissionControlAnchor, unhighlightMissionControl, highlightMissionControl, addMissionControlMarker, allAnchors, addListenersToAnchor, addListenersToMissionControlAnchor, addDeleteAnchor, showAnchors, hideAnchors, addListenersToMagnet, addListenersToMissionControlMagnet, addMarker, removeMarker, highlight, unhighlight, recalculateStartAndEndOfConnection, unhighlightMissionControlFile, highlightMissionControlFile */
 
 var xmlFilename = "sketchmeister.xml";
 var panelSize = 2;
@@ -30,7 +30,6 @@ var allPaintingActions = [];
 
 var addedListeners = [];
 
-
 define(function (require, exports, module) {
     "use strict";
 
@@ -43,6 +42,7 @@ define(function (require, exports, module) {
     var deleteIcon = require.toUrl('./img/delete-button.png');
     var addIcon = require.toUrl('./img/add-button.png');
 
+    var initialize = true;
     
     var CommandManager = brackets.getModule("command/CommandManager"),
         ProjectManager = brackets.getModule("project/ProjectManager"),
@@ -523,9 +523,9 @@ define(function (require, exports, module) {
         var height = $(_activeEditor.getScrollerElement()).height();
         var width = $(_activeEditor.getScrollerElement()).width();
         // breite von myPanel !!!!!! besser ist wohl $("#myPanel").width()
-        width = myPanel.width();
+        //width = $("#myPanel").width();
         // feste Breite ... entscheidung für Nutzer getroffen ... 1500px
-        //width = "1500";
+        width = "1500";
         // keine Ahnung warum 30px mehr sein muessen ... im Editor wird immer noch eine letzte Zeile angezeigt, die keine Zeilennummer hat, aber eine Hoehe
         var totalHeight = _activeEditor.totalHeight() + 30;
 
@@ -554,6 +554,7 @@ define(function (require, exports, module) {
         var length = _documentSketchingAreas.push(sketchingArea);
         return length - 1;
     }
+    
     var ignoreScrollEventsFromPanel = false;
     var ignoreScrollEventsFromEditor = false;
     
@@ -606,12 +607,10 @@ define(function (require, exports, module) {
                     return false;
                 }
             });
-            console.log("already added: " + listenersAlreadyAdded);
             if (listenersAlreadyAdded) {
                 return false;
             }
         }
-        
         addedListeners.push(fullPath);
         editor._codeMirror.on("change", function (cm, change) {
             var magnets = _activeStage.get(".magnet");
@@ -732,63 +731,61 @@ define(function (require, exports, module) {
                 console.log("keine markierung");
             }
         });
+        return true;
     }
 
     function currentDocumentChanged(initialize) {
-        //getCurrentDocument..
-        // set the current Full Editor as _activeEditor
+        // some default stuff
         _activeEditor = EditorManager.getCurrentFullEditor();
-        
-        
-        //var gutter = _activeEditor._codeMirror.getWrapperElement().getElementsByClassName("CodeMirror-gutter")[0];
-        $(_activeEditor).on("scroll", _scroll);
-        myPanel.on("scroll", _scrollEditor);
-
-        // set the current Document as _activeDocument to get additional data of the file
         _activeDocument = DocumentManager.getCurrentDocument();
-
         var _activeFullPath = DocumentManager.getCurrentDocument().file.fullPath;
+        var _activeFilename = DocumentManager.getCurrentDocument().file.name;
+        var thisFileIsOpenedForFirstTime = true;
 
+        // check if MissionControlMagnet is connected to this file, if yes: add marker
         var magnets = missionControl.stage.get(".magnet");
         $.each(magnets, function (key, magnet) {
             if (_activeFullPath === magnet.attrs.fullPath) {
                 addMissionControlMarker(JSON.parse(magnet.attrs.connection), magnet._id);
             }
         });
-    
-        var _activeFilename = DocumentManager.getCurrentDocument().file.name;
         
-        if (initialize) {
-            console.log("init");
-            $.each(DocumentManager.getAllOpenDocuments(), function (key, openDocument) {
-                addListenersToEditor(openDocument._masterEditor, openDocument.file.fullPath, initialize);
-            });
-        } else {
-            console.log("not init");
-            addListenersToEditor(EditorManager.getCurrentFullEditor(), _activeFullPath, initialize);
-        }
-        console.log(addedListeners);
+        magnets = missionControl.stage.get(".magnet");
+        $.each(magnets, function (pos, magnet) {
+            var JSONconnection = JSON.parse(magnet.attrs.connection);
+            if (JSONconnection.start.line === 0 && JSONconnection.end.line === 0) {
+                unhighlightMissionControlFile(magnet);
+                if (magnet.attrs.fullPath === _activeFullPath) {
+                    highlightMissionControlFile(magnet);
+                }
+            }
+        });
+        
+        thisFileIsOpenedForFirstTime = addListenersToEditor(EditorManager.getCurrentFullEditor(), _activeFullPath, initialize);
+      
+
         // go through all already opened sketchingAreas and check if opened file already has a sketchingArea
+        
         var foundSketchingArea = -1;
         if (!initialize) {
             
             $.each(_documentSketchingAreas, function (key, sketchingArea) {
                 sketchingArea.active = false;
-                if (active) {
-                    $('#overlay-' + sketchingArea.id).hide();
-                }
+                $('#overlay-' + sketchingArea.id).hide();
                 if (sketchingArea.fullPath === _activeFullPath) {
                     foundSketchingArea = key;
                 }
             });
         }
-        
         // if sketchingArea is already loaded set it as active, else create a new sketchingArea and add it to Array of sketchingAreas
-        if (!initialize && foundSketchingArea !== -1) {
+        if (!initialize && !thisFileIsOpenedForFirstTime) {
             // sketchingArea was found and it is set
             _activeSketchingArea = _documentSketchingAreas[foundSketchingArea];
             _activeSketchingArea.active = true;
         } else {
+            $(_activeEditor).on("scroll", _scroll);
+            myPanel.on("scroll", _scrollEditor);
+            
             // sketchingArea is not in Array and will be created with _addSketching Area
             var key = _addSketchingArea(_activeFullPath, _activeFilename);
             _activeSketchingArea = _documentSketchingAreas[key];
@@ -799,14 +796,14 @@ define(function (require, exports, module) {
                 moveImageLayerToTop();
             }
             //sketchingArea has been created and now the xml-file has to be checked if there are sketchingActions for that file
+            
             loadSketchingActionsFromXmlToSketchingArea();
         }
-        
-        // adding listeners to newly created Editors or if init then add to all in the workingset
         
         // set the active stage by referencing the stage of the active sketchingArea
         _activeStage = _activeSketchingArea.stage;
         _activeSketchingArea.sketchArea.redraw();
+        _activeSketchingArea.stage.draw();
         if (active) {
             $('#overlay-' + _activeSketchingArea.id).show();
         }
@@ -953,6 +950,52 @@ define(function (require, exports, module) {
         $xml.find("project").append("<missioncontrol>" + missionControlAsJSON + "</missioncontrol>");
     }
     // <a href="#" class="zoomin"></a><a href="#" class="zoomout"></a>
+    
+    function SketchingArea() {
+        this.stage = null;
+        this.canvas = null;
+        this.canvasObj = null;
+        this.active = false;
+        this.id = 0;
+        this.width = 0;
+        this.height = 0;
+        this.overlay = null;
+        this.filename = null;
+        this.fullPath = null;
+        
+    }
+    
+    SketchingArea.prototype.init = function () {
+        this.id = _sketchingAreaIdCounter++;
+        this.height = $(EditorManager.getCurrentFullEditor().getScrollerElement()).height();
+        this.width = $(EditorManager.getCurrentFullEditor().getScrollerElement()).width();
+        this.width = myPanel.width();
+        // feste Breite ... entscheidung für Nutzer getroffen ... 1500px
+        //width = "1500";
+        // keine Ahnung warum 30px mehr sein muessen ... im Editor wird immer noch eine letzte Zeile angezeigt, die keine Zeilennummer hat, aber eine Hoehe
+        var totalHeight = EditorManager.getCurrentFullEditor().totalHeight() + 30;
+
+        this.overlay = ('<div class="overlay" id="overlay-' + this.id + '"><canvas class="simple_sketch" id="simple_sketch-' + this.id + '" width="' + this.width + '" height="' + this.totalHeight + '"></canvas></div>');
+        this.overlay.appendTo("#myPanel");
+        //$("#overlay-" + id).css('height', totalHeight + 'px');
+        this.canvas = $('#simple_sketch-' + this.id).sketch();
+
+        _addSketchingTools(this.id);
+        this.stage = createStage('overlay-' + this.id, myPanel.width(), this.totalHeight, this.path, this.filename);
+        this.filename = DocumentManager.getCurrentDocument().file.name;
+        this.fullPath = DocumentManager.getCurrentDocument().file.fullPath;
+        this.canvasObj = this.canvas.obj;
+        this.active = true;
+
+        if (!active) {
+            _deactivate();
+            //console.log('wurde deaktiviert');
+        }
+        var length = _documentSketchingAreas.push(this.canvas);
+        return length - 1;
+    };
+    
+    
     function MissionControl() {
         this.overlay = $('<div id="missionControl"><div class="left controls"><a href="#" class="add"></a></div><div class="right controls"><a href="#" class="edit"></a></div></div>');
         this.active = false;
@@ -970,7 +1013,6 @@ define(function (require, exports, module) {
     MissionControl.prototype.init = function () {
         this.overlay.appendTo("body");
         this.stage = createStageForMissionControl("missionControl", $("body").width(), $("body").height());
-        console.log(this.stage.getScale());
         this.imageLayering = new Kinetic.Layer({id: 'images'});
         this.stage.add(this.imageLayering);
         $('#missionControl .kineticjs-content').css('z-index', '21');
@@ -979,7 +1021,6 @@ define(function (require, exports, module) {
     };
     
     MissionControl.prototype.zoom = function (event) {
-        console.log(this.stage);
         event.preventDefault();
         var evt = event.originalEvent,
             mx = evt.clientX, /* - canvas.offsetLeft */
@@ -1241,12 +1282,20 @@ define(function (require, exports, module) {
             hideMyPanel();
         } else {
             setSizeOfMyPanel(panelSize);
-            _activate();
-            
-            currentDocumentChanged(false);
-            myPanel.find("canvas").width(myPanel.width());
-            _activeSketchingArea.sketchArea.redraw();
             showMyPanel();
+            _activate();
+            if (!firstActivation) {
+                currentDocumentChanged(false);
+            } else {
+                firstActivation = false;
+            }
+            myPanel.find("canvas").width(myPanel.width());
+            
+            _activeSketchingArea.sketchArea.redraw();
+            _activeStage.setWidth(myPanel.width());
+            _activeStage.draw();
+            
+           
         }
         //Resizer.toggle(myPanel);
     }
@@ -1362,7 +1411,6 @@ define(function (require, exports, module) {
         });
 
         $('body').delegate('.redraw', 'click', function () {
-            console.log("redraw");
             _activeSketchingArea.stage = createStage('overlay-' + _activeSketchingArea.id, myPanel.width(), _activeSketchingArea.height, _activeSketchingArea.fullPath, _activeSketchingArea.filename);
             _activeSketchingArea.stage.draw();
         });
@@ -1518,10 +1566,7 @@ define(function (require, exports, module) {
             _addMyPanel();
             missionControl = new MissionControl();
             missionControl.init();
-            
             currentDocumentChanged(true);
-            _toggleStatus();
-            //initialization ... make stuff and hide everthing
         });
     });
 });

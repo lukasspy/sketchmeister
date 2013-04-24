@@ -144,21 +144,39 @@ function removeMarker(id) {
 
 
 function unhighlightMissionControl(magnet) {
-    magnet.setStrokeWidth(1);
+    
     var fillColor = 'rgba(251,167,13,0.5)';
     var strokeColor = 'rgba(251,167,13,1.0)';
     var JSONconnection = JSON.parse(magnet.attrs.connection);
     if (JSONconnection.start.line === 0 && JSONconnection.end.line === 0) {
         strokeColor = 'rgba(55, 101, 104, 1)';
         fillColor = 'rgba(55, 101, 104, 0.5)';
+    } else {
+        magnet.setStrokeWidth(1);
+        magnet.setFill(fillColor);
+        magnet.setStroke(strokeColor);
+        magnet.transitionTo({
+            scale: {x: 1.0,
+                   y: 1.0},
+            duration: 0.2
+        });
     }
-    magnet.setFill(fillColor);
-    magnet.setStroke(strokeColor);
-    magnet.transitionTo({
-        scale: {x: 1.0,
-               y: 1.0},
-        duration: 0.2
-    });
+}
+
+function unhighlightMissionControlFile(magnet) {
+    var JSONconnection = JSON.parse(magnet.attrs.connection);
+    if (JSONconnection.start.line === 0 && JSONconnection.end.line === 0) {
+        var strokeColor = 'rgba(55, 101, 104, 1)';
+        var fillColor = 'rgba(55, 101, 104, 0.5)';
+        magnet.setStrokeWidth(1);
+        magnet.setFill(fillColor);
+        magnet.setStroke(strokeColor);
+        magnet.transitionTo({
+            scale: {x: 1.0,
+                   y: 1.0},
+            duration: 0.2
+        });
+    }
 }
 
 function highlightMissionControl(magnet, allMagnets) {
@@ -176,6 +194,17 @@ function highlightMissionControl(magnet, allMagnets) {
     magnet.setStrokeWidth(2);
     magnet.setFill('rgba(116, 138, 0, 0.9)');
     magnet.setStroke('rgba(116, 138, 0, 1.0)');
+    magnet.transitionTo({
+        scale: {x: 1.8,
+               y: 1.8},
+        duration: 0.2
+    });
+}
+
+function highlightMissionControlFile(magnet) {
+    magnet.setStrokeWidth(2);
+    magnet.setFill('rgba(55, 101, 104, 0.7)');
+    magnet.setStroke('rgba(55, 101, 104, 1.0)');
     magnet.transitionTo({
         scale: {x: 1.8,
                y: 1.8},
@@ -374,7 +403,11 @@ function addListenersToMissionControlMagnet(magnet, group) {
                 var connection = JSON.parse(this.attrs.connection);
                 var documentToOpen = DocumentManager.getDocumentForPath(this.attrs.fullPath);
                 var thismagnet = this;
-                highlightMissionControl(thismagnet, missionControl.stage.get(".magnet"));
+                if (connection.start.line > 0 && connection.end.line > 0) {
+                    highlightMissionControl(thismagnet, missionControl.stage.get(".magnet"));
+                } else {
+                    highlightMissionControlFile(thismagnet);
+                }
                 thismagnet.clicked = true;
                 missionControl.toggle();
                 documentToOpen.then(
@@ -445,7 +478,7 @@ function addMagnet(group, x, y, connection) {
         stroke: 'rgba(251,167,13,1)',
         fill: 'rgba(251,167,13,0.5)',
         strokeWidth: 1,
-        radius: 8,
+        radius: 12,
         name: 'magnet',
         draggable: true,
         dragOnTop: true,
@@ -508,7 +541,7 @@ function addListenersToAnchor(anchor, group) {
                 deleted = true;
                 $.each(group.get(".magnet"), function (pos, magnet) {
                     removeMarker(magnet._id);
-                    if (activeMarker[this._id]) {
+                    if(activeMarker[this._id]) {
                         activeMarker[this._id].clear();
                     }
                 });
