@@ -413,7 +413,8 @@ define(function (require, exports, module) {
 
 
     function _addSketchingTools(id) {
-        myPanel.append('<div class="tools" id="tools-' + id + '" style="height: ' + $(_activeEditor.getScrollerElement()).height() + 'px"></div>');
+        var height = $(_activeEditor.getScrollerElement()).height() - 100;
+        myPanel.append('<div class="tools" id="tools-' + id + '" style="height: ' + height + 'px"></div>');
         
         $('#tools-' + id).append('<div class="seperator"></div>');
         $('#tools-' + id).append("<a href='#' class='add-image button' title='add images'></a> ");
@@ -534,10 +535,10 @@ define(function (require, exports, module) {
         // breite von myPanel !!!!!! besser ist wohl $("#myPanel").width()
         //width = $("#myPanel").width();
         // feste Breite ... entscheidung für Nutzer getroffen ... 1500px
+        // dieser Wert muss gesetzt werden, auch wenn das Panel deaktiv ist ... => nicht aus myPanel auslesen ...
         width = "1500";
-        // keine Ahnung warum 30px mehr sein muessen ... im Editor wird immer noch eine letzte Zeile angezeigt, die keine Zeilennummer hat, aber eine Hoehe
-        var totalHeight = _activeEditor.totalHeight() + 30;
-
+        // irgendwo kommt eine 30 her ... keine ahnung wo ... ist von CodeMirror irgendwas)
+        var totalHeight = _activeEditor.totalHeight() - 30;
         $("#myPanel").append('<div class="overlay" id="overlay-' + id + '"><canvas class="simple_sketch" id="simple_sketch-' + id + '" width="' + width + '" height="' + totalHeight + '"></canvas></div>');
 
         $("#overlay-" + id).css('height', totalHeight + 'px');
@@ -766,6 +767,7 @@ define(function (require, exports, module) {
                 unhighlightMissionControlFile(magnet);
                 if (magnet.attrs.fullPath === _activeFullPath) {
                     highlightMissionControlFile(magnet);
+                    console.log(magnet);
                 }
             }
         });
@@ -794,7 +796,6 @@ define(function (require, exports, module) {
         } else {
             $(_activeEditor).on("scroll", _scroll);
             myPanel.on("scroll", _scrollEditor);
-            
             // sketchingArea is not in Array and will be created with _addSketching Area
             var key = _addSketchingArea(_activeFullPath, _activeFilename);
             _activeSketchingArea = _documentSketchingAreas[key];
@@ -982,7 +983,7 @@ define(function (require, exports, module) {
         // feste Breite ... entscheidung für Nutzer getroffen ... 1500px
         //width = "1500";
         // keine Ahnung warum 30px mehr sein muessen ... im Editor wird immer noch eine letzte Zeile angezeigt, die keine Zeilennummer hat, aber eine Hoehe
-        var totalHeight = EditorManager.getCurrentFullEditor().totalHeight() + 30;
+        var totalHeight = EditorManager.getCurrentFullEditor().totalHeight();
 
         this.overlay = ('<div class="overlay" id="overlay-' + this.id + '"><canvas class="simple_sketch" id="simple_sketch-' + this.id + '" width="' + this.width + '" height="' + this.totalHeight + '"></canvas></div>');
         this.overlay.appendTo("#myPanel");
@@ -1241,9 +1242,12 @@ define(function (require, exports, module) {
     
     function setSizeOfMyPanel(space) {
         var windowsWidth = $('.content').width();
-        var widthOfMyPanel = (space > 0) ? (windowsWidth / space) : 0;
+        // subtract 30 pixels, due to new SideBar in Sprint 23 
+        var widthOfMyPanel = (space > 0) ? (windowsWidth / space - 30) : 0;
+        var height = $('#editor-holder').height(); // hide horizontal scrollbar behind statusbar
         $('#editor-holder').css('margin-right', widthOfMyPanel);
         myPanel.css("width", widthOfMyPanel);
+        myPanel.css("height", height);
     }
     
     function hideMyPanel() {
@@ -1348,6 +1352,7 @@ define(function (require, exports, module) {
                 setSizeOfMyPanel(panelSize);
                 $('.tools').css('height', $(_activeEditor.getScrollerElement()).height());
                 
+                
                 //$.each(_documentSketchingAreas, function (key, sketchingArea) {
                     //$('#simple_sketch-' + sketchingArea.id).css('width', myPanel.width());
                     //sketchingArea.width = myPanel.width();
@@ -1437,13 +1442,7 @@ define(function (require, exports, module) {
             _activeSketchingArea.stage = createStage('overlay-' + _activeSketchingArea.id, myPanel.width(), _activeSketchingArea.height, _activeSketchingArea.fullPath, _activeSketchingArea.filename);
             _activeSketchingArea.stage.draw();
         });
-        /*
-        $('body').delegate('.overlay .kineticjs-content', 'mousemove mousedown mouseup mouseleave hover', function (e) {
-            e.preventDefault();
-            _activeEditor.setSelection(_activeEditor.getCursorPos(), _activeEditor.getCursorPos());
-            return false;
-        });
-        */
+        
         $('body').delegate('.tools .button', 'click', function () {
             var id = _activeSketchingArea.id;
             $('#tools-' + id + ' .button').removeClass('selected');
@@ -1490,8 +1489,7 @@ define(function (require, exports, module) {
                 $(this).addClass('selected');
                 showAnchors(_activeSketchingArea.stage);
                 $('.tools .sketch-layer').removeClass('selected');
-                
-                
+
                 magnets = _activeStage.get(".magnet");
                 $.each(magnets, function (key, magnet) {
                     magnet.setDraggable(true);
@@ -1526,7 +1524,6 @@ define(function (require, exports, module) {
                 });
                 insertFileToImageArea(files);
             }, function (err) {});
-            //addImageToStage(testImage);
         });
 
         $('body').delegate('.image-layer', 'click', function () {
@@ -1547,18 +1544,6 @@ define(function (require, exports, module) {
             }
             
         });
-        
-        /*$('body').delegate('.asyncScrolling', 'click', function () {
-            // toggle status of asyncScroll
-            if (asyncScroll) {
-                asyncScroll = false;
-                $(this).addClass('selected');
-            } else {
-                asyncScroll = true;
-                $(this).removeClass('selected');
-            }
-        });
-        */
 
     }
      
@@ -1583,6 +1568,8 @@ define(function (require, exports, module) {
     AppInit.appReady(function () {
         
         readXmlFileData(function () {
+            // deactivate LineWrapping, since otherwise height of editor is changed => cannot be mapped to the SketchingArea
+            Editor.setWordWrap(false);
             _addMenuItems();
             _addToolbarIcon();
             _addHandlers();

@@ -47,17 +47,14 @@
 #myPanel {
     background: white;
     position: absolute;
-    top: 38px;
-    right: 0;
-    margin-bottom: 20px;
+    top: 0;
+    right: 30px;
     border-left: 1px solid #e8e8e8;
-    height: 100%;
     overflow: scroll;
-    
 }
 
 #missionControl {
-    background: rgba(255,255,255,0.90);
+    background: rgba(255,255,255,0.95);
     position: absolute;
     top: 0;
     left: 0;
@@ -124,7 +121,6 @@
 
 .overlay {
     display: block;
-    z-index: 1;
     background: transparent;
     overflow: hidden;
     width: 1500px;
@@ -147,7 +143,7 @@
     font-weight: normal;
     font-size: 13px;
     text-shadow: 0px 1px 2px rgba(0, 0, 0, 0.5);
-    font-family: SourceSansPro, Helvetica, Arial, 'ＭＳ Ｐゴシック', 'MS PGothic', sans-serif;
+    font-family: SourceSansPro, Helvetica, Arial, 'MS PGothic', sans-serif;
     letter-spacing: .01em;
 }
 .tools a {

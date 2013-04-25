@@ -492,12 +492,12 @@ function addMagnet(group, x, y, connection) {
 }
 
 function addMissionControlMagnet(group, x, y, connection, fullPath) {
-    var strokeColor = 'rgba(251,167,13,1)';
-    var fillColor = 'rgba(251,167,13,0.5)';
+    var strokeColor = 'rgba(55, 101, 104, 1)';
+    var fillColor = 'rgba(55, 101, 104, 0.7)';
     var JSONconnection = JSON.parse(connection);
     if (JSONconnection.start.line === 0 && JSONconnection.end.line === 0) {
-        strokeColor = 'rgba(55, 101, 104, 1)';
-        fillColor = 'rgba(55, 101, 104, 0.5)';
+        strokeColor = 'rgba(85, 50, 133, 1)';
+        fillColor = 'rgba(85, 50, 133, 0.5)';
     }
     
     var stage = group.getStage();
@@ -541,7 +541,7 @@ function addListenersToAnchor(anchor, group) {
                 deleted = true;
                 $.each(group.get(".magnet"), function (pos, magnet) {
                     removeMarker(magnet._id);
-                    if(activeMarker[this._id]) {
+                    if (activeMarker[this._id]) {
                         activeMarker[this._id].clear();
                     }
                 });
