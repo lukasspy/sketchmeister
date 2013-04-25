@@ -145,12 +145,12 @@ function removeMarker(id) {
 
 function unhighlightMissionControl(magnet) {
     
-    var fillColor = 'rgba(251,167,13,0.5)';
-    var strokeColor = 'rgba(251,167,13,1.0)';
+    var fillColor = 'rgba(145, 161, 112,0.5)';
+    var strokeColor = 'rgba(145, 161, 112,1.0)';
     var JSONconnection = JSON.parse(magnet.attrs.connection);
     if (JSONconnection.start.line === 0 && JSONconnection.end.line === 0) {
-        strokeColor = 'rgba(55, 101, 104, 1)';
-        fillColor = 'rgba(55, 101, 104, 0.5)';
+        strokeColor = 'rgba(85, 50, 133, 1)';
+        fillColor = 'rgba(85, 50, 133, 0.5)';
     } else {
         magnet.setStrokeWidth(1);
         magnet.setFill(fillColor);
@@ -166,8 +166,8 @@ function unhighlightMissionControl(magnet) {
 function unhighlightMissionControlFile(magnet) {
     var JSONconnection = JSON.parse(magnet.attrs.connection);
     if (JSONconnection.start.line === 0 && JSONconnection.end.line === 0) {
-        var strokeColor = 'rgba(55, 101, 104, 1)';
-        var fillColor = 'rgba(55, 101, 104, 0.5)';
+        var strokeColor = 'rgba(85, 50, 133, 1)';
+        var fillColor = 'rgba(85, 50, 133, 0.5)';
         magnet.setStrokeWidth(1);
         magnet.setFill(fillColor);
         magnet.setStroke(strokeColor);
@@ -192,8 +192,8 @@ function highlightMissionControl(magnet, allMagnets) {
         }
     });
     magnet.setStrokeWidth(2);
-    magnet.setFill('rgba(116, 138, 0, 0.9)');
-    magnet.setStroke('rgba(116, 138, 0, 1.0)');
+    //magnet.setFill('rgba(85, 50, 133, 0.9)');
+    //magnet.setStroke('rgba(85, 50, 133, 1.0)');
     magnet.transitionTo({
         scale: {x: 1.8,
                y: 1.8},
@@ -203,8 +203,8 @@ function highlightMissionControl(magnet, allMagnets) {
 
 function highlightMissionControlFile(magnet) {
     magnet.setStrokeWidth(2);
-    magnet.setFill('rgba(55, 101, 104, 0.7)');
-    magnet.setStroke('rgba(55, 101, 104, 1.0)');
+    magnet.setFill('rgba(85, 50, 133, 0.7)');
+    magnet.setStroke('rgba(85, 50, 133, 1.0)');
     magnet.transitionTo({
         scale: {x: 1.8,
                y: 1.8},
@@ -215,8 +215,8 @@ function highlightMissionControlFile(magnet) {
 
 function highlight(magnet) {
     magnet.setStrokeWidth(2);
-    magnet.setFill('rgba(116, 138, 0, 0.8)');
-    magnet.setStroke('rgba(116, 138, 0, 1.0)');
+    magnet.setFill('rgba(80, 103, 142, 0.8)');
+    magnet.setStroke('rgba(80, 103, 142, 1.0)');
     magnet.transitionTo({
         scale: {x: 1.8,
                y: 1.8},
@@ -226,8 +226,8 @@ function highlight(magnet) {
 
 function unhighlight(magnet) {
     magnet.setStrokeWidth(1);
-    magnet.setFill('rgba(251,167,13,0.5)');
-    magnet.setStroke('rgba(251,167,13,1.0)');
+    //magnet.setFill('rgba(251,167,13,0.5)');
+    //magnet.setStroke('rgba(251,167,13,1.0)');
     magnet.transitionTo({
         scale: {x: 1.0,
                y: 1.0},
@@ -476,7 +476,7 @@ function addMagnet(group, x, y, connection) {
         x: x,
         y: y,
         stroke: 'rgba(251,167,13,1)',
-        fill: 'rgba(251,167,13,0.5)',
+        fill: 'rgba(251,167,13,0.8)',
         strokeWidth: 1,
         radius: 12,
         name: 'magnet',
@@ -492,12 +492,12 @@ function addMagnet(group, x, y, connection) {
 }
 
 function addMissionControlMagnet(group, x, y, connection, fullPath) {
-    var strokeColor = 'rgba(55, 101, 104, 1)';
-    var fillColor = 'rgba(55, 101, 104, 0.7)';
+    var strokeColor = 'rgba(145, 161, 112, 1)';
+    var fillColor = 'rgba(145, 161, 112, 0.9)';
     var JSONconnection = JSON.parse(connection);
     if (JSONconnection.start.line === 0 && JSONconnection.end.line === 0) {
         strokeColor = 'rgba(85, 50, 133, 1)';
-        fillColor = 'rgba(85, 50, 133, 0.5)';
+        fillColor = 'rgba(85, 50, 133, 0.8)';
     }
     
     var stage = group.getStage();

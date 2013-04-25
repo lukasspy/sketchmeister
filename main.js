@@ -282,8 +282,8 @@ define(function (require, exports, module) {
                         unhighlight(magnet);
                         var JSONconnection = JSON.parse(magnet.attrs.connection);
                         if (JSONconnection.start.line === 0 && JSONconnection.end.line === 0) {
-                            magnet.setStroke('rgba(55, 101, 104, 1)');
-                            magnet.setFill('rgba(55, 101, 104, 0.5)');
+                            magnet.setStroke('rgba(85, 50, 133, 1)');
+                            magnet.setFill('rgba(85, 50, 133, 0.8)');
                         }
                         magnet.setRadius(12);
                         magnet.attrs.clicked = false;
@@ -767,7 +767,6 @@ define(function (require, exports, module) {
                 unhighlightMissionControlFile(magnet);
                 if (magnet.attrs.fullPath === _activeFullPath) {
                     highlightMissionControlFile(magnet);
-                    console.log(magnet);
                 }
             }
         });
@@ -916,7 +915,6 @@ define(function (require, exports, module) {
     function writeXmlDataToFile() {
         var fileEntry = new NativeFileSystem.FileEntry(ProjectManager.getProjectRoot().fullPath + xmlFilename);
         FileUtils.writeText(fileEntry, "<root>" + $xml.html() + "</root>").done(function () {
-            console.log("XML successfully updated");
         }).fail(function (err) {
             console.log("Error writing text: " + err.name);
         });
@@ -927,7 +925,6 @@ define(function (require, exports, module) {
             saveSketchesAndImages(sketchingArea);
             var fileEntry = new NativeFileSystem.FileEntry(ProjectManager.getProjectRoot().fullPath + xmlFilename);
             FileUtils.writeText(fileEntry, "<root>" + $xml.html() + "</root>").done(function () {
-                console.log("XML successfully updated");
                 if (typeof callback === 'function') { // make sure the callback is a function
                     callback.call(this); // brings the scope to the callback
                 }
