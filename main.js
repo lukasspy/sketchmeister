@@ -32,8 +32,6 @@ var addedListeners = [];
 
 define(function (require, exports, module) {
     "use strict";
-
-    var addImageDialog = require("text!html/dialog.html");
     var sketchIconActive = require.toUrl('./img/sidebar-on.png');
     var sketchIconDeactive = require.toUrl('./img/sidebar-off.png');
     var missionControlActive = require.toUrl('./img/mission-control-on.png');
@@ -53,7 +51,6 @@ define(function (require, exports, module) {
     
     var CommandManager = brackets.getModule("command/CommandManager"),
         ProjectManager = brackets.getModule("project/ProjectManager"),
-        //EditorUtils = brackets.getModule("editor/EditorUtils"),
         EditorManager = brackets.getModule("editor/EditorManager"),
         ExtensionUtils = brackets.getModule("utils/ExtensionUtils"),
         Editor = brackets.getModule("editor/Editor").Editor,
@@ -66,12 +63,8 @@ define(function (require, exports, module) {
         KeyBindingManager = brackets.getModule("command/KeyBindingManager"),
         Dialogs = brackets.getModule("widgets/Dialogs");
     
-    //require('js/jquery-ui-1.10.0.custom.min');
-    //require('js/runmode');
-    
     var loadCSSPromise = ExtensionUtils.loadStyleSheet(module, 'css/main.css');
-   
-    
+
     require('js/sketch');
     require('js/json2');
     require('js/functions');
@@ -145,7 +138,8 @@ define(function (require, exports, module) {
                 tempImage.src = image.attrs.src;
                 var width = image.attrs.width;
                 var height = image.attrs.height;
-                $('<img src="' + image.attrs.src + '" id="tempImage" class="visibility: hidden"/>').load(function () {
+                var tempImageContainer = $('<img src="' + image.attrs.src + '" id="tempImage" class="visibility: hidden"/>');
+                tempImageContainer.load(function () {
                     
                     var group = groups[key];
                     group.setDraggable(false);
@@ -209,6 +203,7 @@ define(function (require, exports, module) {
                     
                     $('#tempImage').remove();
                     image.getLayer().draw();
+                    tempImageContainer = null;
                 });
             });
         } else {
@@ -243,7 +238,8 @@ define(function (require, exports, module) {
                 tempImage.src = image.attrs.src;
                 var width = image.attrs.width;
                 var height = image.attrs.height;
-                $('<img src="' + image.attrs.src + '" id="tempImage" class="visibility: hidden"/>').load(function () {
+                var tempImageContainer = $('<img src="' + image.attrs.src + '" id="tempImage" class="visibility: hidden"/>');
+                tempImageContainer.load(function () {
                     
                     var group = groups[key];
                     group.setDraggable(true);
@@ -279,10 +275,10 @@ define(function (require, exports, module) {
                     $.each(magnets, function (key, magnet) {
                         //magnet.setDraggable(false);
                         //console.log(magnet._id);
-                        unhighlight(magnet);
+                        unhighlightMissionControl(magnet);
                         var JSONconnection = JSON.parse(magnet.attrs.connection);
                         if (JSONconnection.start.line === 0 && JSONconnection.end.line === 0) {
-                            magnet.setStroke('rgba(85, 50, 133, 1)');
+                            magnet.setStroke('rgba(47, 31, 74, 1)');
                             magnet.setFill('rgba(85, 50, 133, 0.8)');
                         }
                         magnet.setRadius(12);
@@ -312,6 +308,7 @@ define(function (require, exports, module) {
                     
                     $('#tempImage').remove();
                     image.getLayer().draw();
+                    tempImageContainer = null;
                 });
             });
         } else {
@@ -330,7 +327,8 @@ define(function (require, exports, module) {
         var heightOfImage;
         var tempImage = new Image();
 
-        $('<img src="' + imageToAdd + '" id="tempImage" class="visibility: hidden"/>').load(function () {
+        var tempImageContainer = $('<img src="' + imageToAdd + '" id="tempImage" class="visibility: hidden"/>');
+        tempImageContainer.load(function () {
             $(this).appendTo('#sidebar');
             tempImage.src = $('#tempImage').attr('src');
             widthOfImage = tempImage.width;
@@ -402,11 +400,10 @@ define(function (require, exports, module) {
                 this.moveToTop();
             });
             
-            
             _activeSketchingArea.stage.draw();
             $('#tempImage').remove();
+            tempImageContainer = null;
         });
-
     }
 
     /*----- functions for sketching area ------*/
@@ -1004,7 +1001,7 @@ define(function (require, exports, module) {
     
     
     function MissionControl() {
-        this.overlay = $('<div id="missionControl"><div class="top controls"><a href="#" class="esc"></a></div><div class="bottom controls"><a href="#" class="add"></a><a href="#" class="edit"></a></div></div>');
+        this.overlay = $('<div id="missionControl"><div class="top controls"><a href="#" class="esc"></a></div><div class="bottom controls"><a href="#" class="reset-zoom"></a><a href="#" class="add"></a><a href="#" class="edit"></a></div></div>');
         this.active = false;
         this.editMode = false;
         this.stage = null;
@@ -1150,10 +1147,10 @@ define(function (require, exports, module) {
         var heightOfImage;
         var tempImage = new Image();
         var thisMissionControl = this;
-        var imageElement = $('<img src="' + imageToAdd + '" id="tempImage" class="visibility: hidden"/>');
+        var tempImageContainer = $('<img src="' + imageToAdd + '" id="tempImage" class="visibility: hidden"/>');
         
-        imageElement.load(function () {
-            imageElement.appendTo('#sidebar');
+        tempImageContainer.load(function () {
+            tempImageContainer.appendTo('#sidebar');
             tempImage.src = $('#tempImage').attr('src');
             widthOfImage = tempImage.width;
             heightOfImage = tempImage.height;
@@ -1214,9 +1211,10 @@ define(function (require, exports, module) {
             
             $('#tempImage').remove();
             thisMissionControl.stage.draw();
+            tempImageContainer = null;
         });
         this.activateEditMode();
-    
+        
     };
     
     function resetAllVariables() {
@@ -1419,6 +1417,11 @@ define(function (require, exports, module) {
         
         $('body').delegate('#missionControl .controls a.esc', 'click', function () {
             missionControl.toggle();
+        });
+        
+        $('body').delegate('#missionControl .controls a.reset-zoom', 'click', function () {
+            missionControl.stage.setScale(1.0, 1.0);
+            missionControl.stage.draw();
         });
         
         $(document).keydown(function (e) {

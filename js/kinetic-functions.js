@@ -145,8 +145,8 @@ function removeMarker(id) {
 
 function unhighlightMissionControl(magnet) {
     
-    var fillColor = 'rgba(145, 161, 112,0.5)';
-    var strokeColor = 'rgba(145, 161, 112,1.0)';
+    var fillColor = 'rgba(140, 184, 119, 0.5)';
+    var strokeColor = 'rgba(66, 87, 56, 1.0)';
     var JSONconnection = JSON.parse(magnet.attrs.connection);
     if (JSONconnection.start.line === 0 && JSONconnection.end.line === 0) {
         strokeColor = 'rgba(85, 50, 133, 1)';
@@ -166,7 +166,7 @@ function unhighlightMissionControl(magnet) {
 function unhighlightMissionControlFile(magnet) {
     var JSONconnection = JSON.parse(magnet.attrs.connection);
     if (JSONconnection.start.line === 0 && JSONconnection.end.line === 0) {
-        var strokeColor = 'rgba(85, 50, 133, 1)';
+        var strokeColor = 'rgba(47, 31, 74, 1)';
         var fillColor = 'rgba(85, 50, 133, 0.5)';
         magnet.setStrokeWidth(1);
         magnet.setFill(fillColor);
@@ -204,7 +204,7 @@ function highlightMissionControl(magnet, allMagnets) {
 function highlightMissionControlFile(magnet) {
     magnet.setStrokeWidth(2);
     magnet.setFill('rgba(85, 50, 133, 0.7)');
-    magnet.setStroke('rgba(85, 50, 133, 1.0)');
+    magnet.setStroke('rgba(47, 31, 74, 1.0)');
     magnet.transitionTo({
         scale: {x: 1.8,
                y: 1.8},
@@ -226,8 +226,8 @@ function highlight(magnet) {
 
 function unhighlight(magnet) {
     magnet.setStrokeWidth(1);
-    //magnet.setFill('rgba(251,167,13,0.5)');
-    //magnet.setStroke('rgba(251,167,13,1.0)');
+    magnet.setFill('rgba(251,167,13,0.8)');
+    magnet.setStroke('rgba(251,167,13,1.0)');
     magnet.transitionTo({
         scale: {x: 1.0,
                y: 1.0},
@@ -403,48 +403,52 @@ function addListenersToMissionControlMagnet(magnet, group) {
                 var connection = JSON.parse(this.attrs.connection);
                 var documentToOpen = DocumentManager.getDocumentForPath(this.attrs.fullPath);
                 var thismagnet = this;
+                
                 if (connection.start.line > 0 && connection.end.line > 0) {
                     highlightMissionControl(thismagnet, missionControl.stage.get(".magnet"));
                 } else {
                     highlightMissionControlFile(thismagnet);
                 }
-                thismagnet.clicked = true;
-                missionControl.toggle();
-                documentToOpen.then(
-                    function (object) {
-                        DocumentManager.setCurrentDocument(object);
-                        DocumentManager.addToWorkingSet(object.file);
-                        if (connection.start.line > 0 && connection.end.line > 0) {
-                            var scrollPos = EditorManager.getCurrentFullEditor().getScrollPos();
-                            var lineHeight = EditorManager.getCurrentFullEditor()._codeMirror.defaultTextHeight();
-                            var firstVisibleLine = Math.ceil(scrollPos.y / lineHeight) - 1;
-                            var editorHeight = $(EditorManager.getCurrentFullEditor().getScrollerElement()).height();
-                            var lastVisibleLine = Math.floor((scrollPos.y + editorHeight) / lineHeight) - 1;
-                            var timeout = 0;
-                            var pos;
-                            if (connection.start.line < firstVisibleLine) {
-                                timeout = 700;
-                                pos = connection.start.line * lineHeight;
-                                $(EditorManager.getCurrentFullEditor().getScrollerElement()).animate({ scrollTop: pos }, timeout);
-                                
-                            } else if (connection.end.line > lastVisibleLine) {
-                                timeout = 700;
-                                pos = connection.end.line * lineHeight;
-                                $(EditorManager.getCurrentFullEditor().getScrollerElement()).animate({ scrollTop: pos - editorHeight + 3 * lineHeight }, timeout);
+                setTimeout(function () {
+                    //wait for the animation to show feedback
+                    thismagnet.clicked = true;
+                    missionControl.toggle();
+                    documentToOpen.then(
+                        function (object) {
+                            DocumentManager.setCurrentDocument(object);
+                            DocumentManager.addToWorkingSet(object.file);
+                            if (connection.start.line > 0 && connection.end.line > 0) {
+                                var scrollPos = EditorManager.getCurrentFullEditor().getScrollPos();
+                                var lineHeight = EditorManager.getCurrentFullEditor()._codeMirror.defaultTextHeight();
+                                var firstVisibleLine = Math.ceil(scrollPos.y / lineHeight) - 1;
+                                var editorHeight = $(EditorManager.getCurrentFullEditor().getScrollerElement()).height();
+                                var lastVisibleLine = Math.floor((scrollPos.y + editorHeight) / lineHeight) - 1;
+                                var timeout = 0;
+                                var pos;
+                                if (connection.start.line < firstVisibleLine) {
+                                    timeout = 700;
+                                    pos = connection.start.line * lineHeight;
+                                    $(EditorManager.getCurrentFullEditor().getScrollerElement()).animate({ scrollTop: pos }, timeout);
+                                    
+                                } else if (connection.end.line > lastVisibleLine) {
+                                    timeout = 700;
+                                    pos = connection.end.line * lineHeight;
+                                    $(EditorManager.getCurrentFullEditor().getScrollerElement()).animate({ scrollTop: pos - editorHeight + 3 * lineHeight }, timeout);
+                                }
+                                setTimeout(function () {
+                                    $(".magnet-" + thismagnet._id).addClass("selectionLinkFromMissionControl");
+                                    activeMarker[thismagnet._id] = EditorManager.getCurrentFullEditor()._codeMirror.markText(connection.start, connection.end, {className : 'selectionLinkFromMissionControl'});
+                                }, timeout);
+                            } else {
+                                thismagnet.clicked = false;
+                                unhighlightMissionControl(thismagnet);
                             }
-                            setTimeout(function () {
-                                $(".magnet-" + thismagnet._id).addClass("selectionLinkFromMissionControl");
-                                activeMarker[thismagnet._id] = EditorManager.getCurrentFullEditor()._codeMirror.markText(connection.start, connection.end, {className : 'selectionLinkFromMissionControl'});
-                            }, timeout);
-                        } else {
-                            thismagnet.clicked = false;
-                            unhighlightMissionControl(thismagnet);
+                        },
+                        function (error) {
+                        // saving the object failed.
                         }
-                    },
-                    function (error) {
-                    // saving the object failed.
-                    }
-                );
+                    );
+                }, 1000);    
             } else {
                 $(".magnet-" + this._id).removeClass("selectionLinkFromMissionControl");
                 activeMarker[this._id].clear();
@@ -492,11 +496,11 @@ function addMagnet(group, x, y, connection) {
 }
 
 function addMissionControlMagnet(group, x, y, connection, fullPath) {
-    var strokeColor = 'rgba(145, 161, 112, 1)';
-    var fillColor = 'rgba(145, 161, 112, 0.9)';
+    var strokeColor = 'c, 1)';
+    var fillColor = 'rgba(140, 184, 119, 0.9)';
     var JSONconnection = JSON.parse(connection);
     if (JSONconnection.start.line === 0 && JSONconnection.end.line === 0) {
-        strokeColor = 'rgba(85, 50, 133, 1)';
+        strokeColor = 'rgba(47, 31, 74, 1)';
         fillColor = 'rgba(85, 50, 133, 0.8)';
     }
     
