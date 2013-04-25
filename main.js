@@ -70,6 +70,7 @@ define(function (require, exports, module) {
     require('js/functions');
     require('js/kinetic-v4.3.1');
     require('js/kinetic-functions');
+    require('js/jquery-ui-1.10.0.custom.min');
 
     /*----- xml functions -----*/
 
@@ -135,10 +136,15 @@ define(function (require, exports, module) {
             $.each(images, function (key, image) {
                 
                 var tempImage = new Image();
-                tempImage.src = image.attrs.src;
+                
+                if (image.attrs.relative) {
+                    tempImage.src = fullProjectPath + image.attrs.src;
+                } else {
+                    tempImage.src = image.attrs.src;
+                }
                 var width = image.attrs.width;
                 var height = image.attrs.height;
-                var tempImageContainer = $('<img src="' + image.attrs.src + '" id="tempImage" class="visibility: hidden"/>');
+                var tempImageContainer = $('<img src="' + tempImage.src + '" id="tempImage" class="visibility: hidden"/>');
                 tempImageContainer.load(function () {
                     
                     var group = groups[key];
@@ -171,14 +177,11 @@ define(function (require, exports, module) {
                     $.each(anchors, function (key, anchor) {
                         addListenersToAnchor(anchor, group);
                     });
-                    //addDeleteAnchor(group, width, 0, 'delete');
-                    //addAnchor(group, width, height, 'bottomRight');
                 
                     hideAnchors(stage);
                     var magnets = group.get(".magnet");
                     $.each(magnets, function (key, magnet) {
                         magnet.setDraggable(false);
-                        //console.log(magnet._id);
                         addMarker(JSON.parse(magnet.attrs.connection), magnet._id);
                         addListenersToMagnet(magnet, group);
                     });
@@ -223,6 +226,7 @@ define(function (require, exports, module) {
     
     function createStageForMissionControl(container, width, height) {
         var stage;
+        var fullProjectPath = ProjectManager.getProjectRoot().fullPath;
         var missionControlAsJSON = $xml.find("project").find("missioncontrol");
         if (missionControlAsJSON.html() !== null) {
             stage = Kinetic.Node.create(missionControlAsJSON.html(), container);
@@ -235,10 +239,16 @@ define(function (require, exports, module) {
             $.each(images, function (key, image) {
                 
                 var tempImage = new Image();
-                tempImage.src = image.attrs.src;
+                
+                if (image.attrs.relative) {
+                    tempImage.src = fullProjectPath + image.attrs.src;
+                } else {
+                    tempImage.src = image.attrs.src;
+                }
+
                 var width = image.attrs.width;
                 var height = image.attrs.height;
-                var tempImageContainer = $('<img src="' + image.attrs.src + '" id="tempImage" class="visibility: hidden"/>');
+                var tempImageContainer = $('<img src="' + tempImage.src + '" id="tempImage" class="visibility: hidden"/>');
                 tempImageContainer.load(function () {
                     
                     var group = groups[key];
@@ -263,7 +273,6 @@ define(function (require, exports, module) {
                     anchors = group.get(".bottomRight");
                     $.each(anchors, function (key, anchor) {
                         addListenersToMissionControlAnchor(anchor, group);
-
                     });
                     
                     anchors = group.get(".bottomLeft");
@@ -273,8 +282,6 @@ define(function (require, exports, module) {
                     
                     var magnets = group.get(".magnet");
                     $.each(magnets, function (key, magnet) {
-                        //magnet.setDraggable(false);
-                        //console.log(magnet._id);
                         unhighlightMissionControl(magnet);
                         var JSONconnection = JSON.parse(magnet.attrs.connection);
                         if (JSONconnection.start.line === 0 && JSONconnection.end.line === 0) {
@@ -326,7 +333,12 @@ define(function (require, exports, module) {
         var widthOfImage;
         var heightOfImage;
         var tempImage = new Image();
-
+        var fullProjectPath = ProjectManager.getProjectRoot().fullPath;
+        
+        //check if image is in the project folder, if yes set relative true
+        var updatedPath = imageToAdd.replace(fullProjectPath, "");
+        var relative = (imageToAdd !== updatedPath) ? true : false;
+        console.log(relative + " and the path is: " + updatedPath);
         var tempImageContainer = $('<img src="' + imageToAdd + '" id="tempImage" class="visibility: hidden"/>');
         tempImageContainer.load(function () {
             $(this).appendTo('#sidebar');
@@ -359,7 +371,8 @@ define(function (require, exports, module) {
                 width: widthResized,
                 height: heightResized,
                 name: 'image',
-                src: tempImage.src
+                src: updatedPath,
+                relative: relative
             });
             
             newImg.on('mouseover', function () {
@@ -378,22 +391,12 @@ define(function (require, exports, module) {
                     layer.draw();
                 }
             });
-            /*
-            newImg.on('mouseover', function () {
-                this.setStrokeWidth(4);
-            });
-            
-            newImg.on('mouseout', function () {
-                this.setStrokeWidth(0);
-            });
-            */
             imageGroup.add(newImg);
             var thisImageLayer = _activeSketchingArea.stage.getChildren()[0];
             thisImageLayer.add(imageGroup);
 
             addAnchor(imageGroup, 0, 0, 'topLeft', deleteIcon);
             addAnchor(imageGroup, widthResized, 0, 'topRight', addIcon);
-            //addDeleteAnchor(imageGroup, widthResized, 0, 'delete');
             addAnchor(imageGroup, widthResized, heightResized, 'bottomRight');
             addAnchor(imageGroup, 0, heightResized, 'bottomLeft');
             imageGroup.on('dragstart', function () {
@@ -416,8 +419,6 @@ define(function (require, exports, module) {
         $('#tools-' + id).append('<div class="seperator"></div>');
         $('#tools-' + id).append("<a href='#' class='add-image button' title='add images'></a> ");
         $('#tools-' + id).append("<a href='#' class='image-layer edit' title='edit images'></a> ");
-        //$('#tools-' + id).append("<a href='#' class='asyncScrolling button'>scroll</a> ");
-        //$('#tools-' + id).append("<a href='#' class='redraw button'>redraw</a> ");
         $('#tools-' + id).append("<a href='#' class='sketch-layer button' title='sketch'></a> ");
         
         var sketchingTools = $('<div class="sketching-tools"></div>');
@@ -425,8 +426,6 @@ define(function (require, exports, module) {
         sketchingTools.append('<a href="#simple_sketch-' + id + '" data-undo="1" class="undo" title="undo"></a>');
         sketchingTools.append("<a href='#simple_sketch-" + id + "' data-clear='1' class='clear' title='clear'></a> ");
 
-        
-        //sketchingTools.append('<div class="seperator">Color</div>');
         var colors = {
             'black': '#000000',
             'grey': '#B2ADA1',
@@ -452,7 +451,6 @@ define(function (require, exports, module) {
         $.each(sizes, function (key, value) {
             if (key === "small") {
                 sketchingTools.append("<a class='size " + key + " selected' href='#simple_sketch-" + id + "' data-size='" + (value - 3) + "'>" + value + "</a> ");
-
             } else {
                 sketchingTools.append("<a class='size " + key + "' href='#simple_sketch-" + id + "' data-size='" + (value - 3) + "'>" + value + "</a> ");
             }
@@ -529,12 +527,11 @@ define(function (require, exports, module) {
         var id = _sketchingAreaIdCounter++;
         var height = $(_activeEditor.getScrollerElement()).height();
         var width = $(_activeEditor.getScrollerElement()).width();
-        // breite von myPanel !!!!!! besser ist wohl $("#myPanel").width()
-        //width = $("#myPanel").width();
+
         // feste Breite ... entscheidung für Nutzer getroffen ... 1500px
         // dieser Wert muss gesetzt werden, auch wenn das Panel deaktiv ist ... => nicht aus myPanel auslesen ...
         width = "1500";
-        // irgendwo kommt eine 30 her ... keine ahnung wo ... ist von CodeMirror irgendwas)
+        // irgendwo kommt eine 30 her ... keine ahnung wo ... ist von CodeMirror irgendwas
         var totalHeight = _activeEditor.totalHeight() - 30;
         $("#myPanel").append('<div class="overlay" id="overlay-' + id + '"><canvas class="simple_sketch" id="simple_sketch-' + id + '" width="' + width + '" height="' + totalHeight + '"></canvas></div>');
 
@@ -657,7 +654,9 @@ define(function (require, exports, module) {
                                 // mark in text is set, so lets clear and delete the mark-reference
                                 unhighlight(magnet);
                                 magnet.clicked = false;
-                                activeMarker[magnet._id].clear();
+                                if (activeMarker[magnet._id]) {
+                                    activeMarker[magnet._id].clear();
+                                }
                                 $(".magnet-" + magnet._id).removeClass('selectionLink');
                                 delete (activeMarker[magnet._id]);
                                 asyncScroll = true;
@@ -720,7 +719,9 @@ define(function (require, exports, module) {
                                 if (magnet.clicked) {
                                     unhighlightMissionControl(magnet);
                                     magnet.clicked = false;
-                                    activeMarker[magnet._id].clear();
+                                    if (activeMarker[magnet._id]) {
+                                        activeMarker[magnet._id].clear();
+                                    }
                                     $(".magnet-" + magnet._id).removeClass('selectionLinkFromMissionControl');
                                     delete (activeMarker[magnet._id]);
                                 } else {
@@ -749,10 +750,13 @@ define(function (require, exports, module) {
         var _activeFilename = DocumentManager.getCurrentDocument().file.name;
         var thisFileIsOpenedForFirstTime = true;
 
+        var fullProjectPath = ProjectManager.getProjectRoot().fullPath;
+        var relativePath = _activeFullPath.replace(fullProjectPath, "");
+
         // check if MissionControlMagnet is connected to this file, if yes: add marker
         var magnets = missionControl.stage.get(".magnet");
         $.each(magnets, function (key, magnet) {
-            if (_activeFullPath === magnet.attrs.fullPath) {
+            if (relativePath === magnet.attrs.relativePath) {
                 addMissionControlMarker(JSON.parse(magnet.attrs.connection), magnet._id);
             }
         });
@@ -762,7 +766,7 @@ define(function (require, exports, module) {
             var JSONconnection = JSON.parse(magnet.attrs.connection);
             if (JSONconnection.start.line === 0 && JSONconnection.end.line === 0) {
                 unhighlightMissionControlFile(magnet);
-                if (magnet.attrs.fullPath === _activeFullPath) {
+                if (relativePath === magnet.attrs.relativePath) {
                     highlightMissionControlFile(magnet);
                 }
             }
@@ -770,12 +774,9 @@ define(function (require, exports, module) {
         
         thisFileIsOpenedForFirstTime = addListenersToEditor(EditorManager.getCurrentFullEditor(), _activeFullPath, initialize);
       
-
-        // go through all already opened sketchingAreas and check if opened file already has a sketchingArea
-        
+        // go through all already opened sketchingAreas and check if opened file already has a sketchingArea  
         var foundSketchingArea = -1;
         if (!initialize) {
-            
             $.each(_documentSketchingAreas, function (key, sketchingArea) {
                 sketchingArea.active = false;
                 $('#overlay-' + sketchingArea.id).hide();
@@ -802,7 +803,6 @@ define(function (require, exports, module) {
                 moveImageLayerToTop();
             }
             //sketchingArea has been created and now the xml-file has to be checked if there are sketchingActions for that file
-            
             loadSketchingActionsFromXmlToSketchingArea();
         }
         
@@ -876,8 +876,8 @@ define(function (require, exports, module) {
             }
         }).fail(function (err) {
             createProjectNode(fullProjectPath);
-            if (typeof callback === 'function') { // make sure the callback is a function
-                callback.call(this); // brings the scope to the callback
+            if (typeof callback === 'function') {
+                callback.call(this);
             }
         });
         
@@ -922,8 +922,8 @@ define(function (require, exports, module) {
             saveSketchesAndImages(sketchingArea);
             var fileEntry = new NativeFileSystem.FileEntry(ProjectManager.getProjectRoot().fullPath + xmlFilename);
             FileUtils.writeText(fileEntry, "<root>" + $xml.html() + "</root>").done(function () {
-                if (typeof callback === 'function') { // make sure the callback is a function
-                    callback.call(this); // brings the scope to the callback
+                if (typeof callback === 'function') {
+                    callback.call(this);
                 }
             }).fail(function (err) {
                 console.log("Error writing text: " + err.name);
@@ -932,11 +932,8 @@ define(function (require, exports, module) {
     }
     
     function saveAll() {
-        // readXmlFileData ist vielleicht unnoetig, weil ja schon beim loaden alles gelesen werden .
-        //readXmlFileData(function () {
         saveSketchesAndImagesOfAllAreas();
         writeXmlDataToFile();
-        //});
     }
     
     function insertFileToImageArea(files) {
@@ -953,7 +950,6 @@ define(function (require, exports, module) {
         $xml.find("project").children("missioncontrol").remove();
         $xml.find("project").append("<missioncontrol>" + missionControlAsJSON + "</missioncontrol>");
     }
-    // <a href="#" class="zoomin"></a><a href="#" class="zoomout"></a>
     
     function SketchingArea() {
         this.stage = null;
@@ -993,7 +989,6 @@ define(function (require, exports, module) {
 
         if (!active) {
             _deactivate();
-            //console.log('wurde deaktiviert');
         }
         var length = _documentSketchingAreas.push(this.canvas);
         return length - 1;
@@ -1059,12 +1054,12 @@ define(function (require, exports, module) {
     MissionControl.prototype.toggle = function () {
         if (this.active) {
             this.active = false;
-            this.overlay.hide(); //fadeOut("fast");
+            this.overlay.hide("puff"); //fadeOut("fast");
             saveMissionControl();
             writeXmlDataToFile();
         } else {
             this.active = true;
-            this.overlay.show(); //fadeIn("fast");
+            this.overlay.show("puff"); //fadeIn("fast");
         }
     };
     
@@ -1147,8 +1142,13 @@ define(function (require, exports, module) {
         var heightOfImage;
         var tempImage = new Image();
         var thisMissionControl = this;
-        var tempImageContainer = $('<img src="' + imageToAdd + '" id="tempImage" class="visibility: hidden"/>');
         
+        var fullProjectPath = ProjectManager.getProjectRoot().fullPath;
+        //check if image is in the project folder, if yes set relative true
+        var updatedPath = imageToAdd.replace(fullProjectPath, "");
+        var relative = (imageToAdd !== updatedPath) ? true : false;
+        
+        var tempImageContainer = $('<img src="' + imageToAdd + '" id="tempImage" class="visibility: hidden"/>');
         tempImageContainer.load(function () {
             tempImageContainer.appendTo('#sidebar');
             tempImage.src = $('#tempImage').attr('src');
@@ -1181,7 +1181,8 @@ define(function (require, exports, module) {
                 width: widthResized,
                 height: heightResized,
                 name: 'image',
-                src: tempImage.src
+                src: updatedPath,
+                relative: relative
             });
             
             newImg.on('mouseover', function () {
@@ -1233,6 +1234,7 @@ define(function (require, exports, module) {
         imageLayer = "";
         _codeMirror = null;
         allPaintingActions = [];
+        missionControl = null;
     }
     
     function setSizeOfMyPanel(space) {
@@ -1266,20 +1268,6 @@ define(function (require, exports, module) {
                 }, 750);
             }
         });
-        //Resizer.makeResizable(myPanel, 'horz', 'LEFT', '200', false, true);
-        //Resizer.hide(myPanel);
-        /*
-        myPanel.mouseenter(function () {
-            mouseOverPanel = true;
-            asyncScroll = true;
-            $('.asyncScrolling').addClass('selected');
-        });
-        $('#editor-holder').mouseenter(function () {
-            mouseOverPanel = false;
-            asyncScroll = false;
-            $('.asyncScrolling').removeClass('selected');
-        });
-        */
         hideMyPanel();
     }
     
@@ -1302,10 +1290,7 @@ define(function (require, exports, module) {
             _activeSketchingArea.sketchArea.redraw();
             _activeStage.setWidth(myPanel.width());
             _activeStage.draw();
-            
-           
         }
-        //Resizer.toggle(myPanel);
     }
     
     function init() {
@@ -1337,37 +1322,23 @@ define(function (require, exports, module) {
         });
         $(ProjectManager).on("beforeProjectClose", function () {
             _projectClosed = true;
-            
             //save();
-            
         });
         
         $(window).resize(function () {
             if (active) {
                 setSizeOfMyPanel(panelSize);
-                $('.tools').css('height', $(_activeEditor.getScrollerElement()).height());
-                
-                
-                //$.each(_documentSketchingAreas, function (key, sketchingArea) {
-                    //$('#simple_sketch-' + sketchingArea.id).css('width', myPanel.width());
-                    //sketchingArea.width = myPanel.width();
-                    //sketchingArea.height = myPanel.height();
-                    //sketchingArea.stage.setWidth(myPanel.width());
-                    //sketchingArea.stage.setHeight(myPanel.height());
-                //});
-                //$(".overlay").width(myPanel.width());
-                //$(".overlay").height(myPanel.height());
-                
+                $('.tools').css('height', $(_activeEditor.getScrollerElement()).height() - 100);
             } else {
                 setSizeOfMyPanel(0);
             }
+            missionControl.stage.setWidth($("body").width());
+            missionControl.stage.setHeight($("body").height());
         });
         
         $(EditorManager).on("activeEditorChange", function () {
             if (active) {
                 setSizeOfMyPanel(panelSize);
-                //resize all SketchingAreas
-                //resize all Stages
             } else {
                 setSizeOfMyPanel(0);
             }
@@ -1568,7 +1539,7 @@ define(function (require, exports, module) {
     AppInit.appReady(function () {
         
         readXmlFileData(function () {
-            // deactivate LineWrapping, since otherwise height of editor is changed => cannot be mapped to the SketchingArea
+            // deactivate LineWrapping, since otherwise height of editorWrapper is changed => cannot be mapped to the SketchingArea
             Editor.setWordWrap(false);
             _addMenuItems();
             _addToolbarIcon();

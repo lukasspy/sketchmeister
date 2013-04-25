@@ -1,6 +1,7 @@
 /*jslint vars: true, plusplus: true, devel: true, nomen: true, regexp: true, indent: 4, maxerr: 50, browser: true*/
 /*global define, $, brackets, window, CodeMirror, document, Kinetic, addImageToStage, asyncScroll, _activeLayer, activeMarker, allAnchors, missionControl */
 var DocumentManager = brackets.getModule("document/DocumentManager"),
+    ProjectManager = brackets.getModule("project/ProjectManager"),
     EditorManager = brackets.getModule("editor/EditorManager");
 var sketchIconActive = require.toUrl('./sketch_button_on.png');
 var sketchIconDeactive = require.toUrl('./sketch_button_off.png');
@@ -401,7 +402,8 @@ function addListenersToMissionControlMagnet(magnet, group) {
             
             if (!this.clicked) {
                 var connection = JSON.parse(this.attrs.connection);
-                var documentToOpen = DocumentManager.getDocumentForPath(this.attrs.fullPath);
+                var fullProjectPath = ProjectManager.getProjectRoot().fullPath;
+                var documentToOpen = DocumentManager.getDocumentForPath(fullProjectPath + this.attrs.relativePath);
                 var thismagnet = this;
                 
                 if (connection.start.line > 0 && connection.end.line > 0) {
@@ -445,13 +447,15 @@ function addListenersToMissionControlMagnet(magnet, group) {
                             }
                         },
                         function (error) {
-                        // saving the object failed.
+                            console.log(documentToOpen);
                         }
                     );
-                }, 1000);    
+                }, 600);
             } else {
                 $(".magnet-" + this._id).removeClass("selectionLinkFromMissionControl");
-                activeMarker[this._id].clear();
+                if (activeMarker[this._id]) {
+                    activeMarker[this._id].clear();
+                }
                 unhighlightMissionControl(this);
                 this.clicked = false;
             }
@@ -495,7 +499,7 @@ function addMagnet(group, x, y, connection) {
     return magnet._id;
 }
 
-function addMissionControlMagnet(group, x, y, connection, fullPath) {
+function addMissionControlMagnet(group, x, y, connection, relativePath) {
     var strokeColor = 'c, 1)';
     var fillColor = 'rgba(140, 184, 119, 0.9)';
     var JSONconnection = JSON.parse(connection);
@@ -517,7 +521,7 @@ function addMissionControlMagnet(group, x, y, connection, fullPath) {
         draggable: true,
         dragOnTop: true,
         connection: connection,
-        fullPath: fullPath,
+        relativePath: relativePath,
         clicked: false
     });
     group.add(magnet);
@@ -714,7 +718,11 @@ function addListenersToMissionControlAnchor(anchor, group) {
         anchor.on('mouseup touchend', function () {
             if (EditorManager.getCurrentFullEditor().hasSelection()) {
                 var connection = EditorManager.getCurrentFullEditor().getSelection();
-                var id = addMissionControlMagnet(group, 40, 40, JSON.stringify(connection), DocumentManager.getCurrentDocument().file.fullPath);
+                var fullPath = DocumentManager.getCurrentDocument().file.fullPath;
+                var fullProjectPath = ProjectManager.getProjectRoot().fullPath;
+                var relativePath = fullPath.replace(fullProjectPath, "");
+                var id = addMissionControlMagnet(group, 40, 40, JSON.stringify(connection), relativePath);
+                console.log(DocumentManager.getCurrentDocument().file.fullPath);
                 addMissionControlMarker(connection, id);
                 marker = EditorManager.getCurrentFullEditor()._codeMirror.markText(connection.start, connection.end, {className : 'selectionLink'});
                 EditorManager.getCurrentFullEditor().setCursorPos(connection.start);
