@@ -64,7 +64,9 @@ var __slice = Array.prototype.slice;
                         sketch.undo();
                     }
                     if ($(this).attr('data-clear')) {
-                        sketch.clear();
+                        if(confirm("All drawings on this canvas will be deleted!")) {
+                            sketch.clear();
+                        }
                     }
                     if ($(this).attr('data-save')) {
                         sketch.saveActions();

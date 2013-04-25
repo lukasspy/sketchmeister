@@ -34,13 +34,20 @@ define(function (require, exports, module) {
     "use strict";
 
     var addImageDialog = require("text!html/dialog.html");
-    var sketchIconActive = require.toUrl('./img/sketch_button_on.png');
-    var sketchIconDeactive = require.toUrl('./img/sketch_button_off.png');
+    var sketchIconActive = require.toUrl('./img/sidebar-on.png');
+    var sketchIconDeactive = require.toUrl('./img/sidebar-off.png');
+    var missionControlActive = require.toUrl('./img/mission-control-on.png');
+    var missionControlDeactive = require.toUrl('./img/mission-control-off.png');
     var testImage = require.toUrl('./img/test.png');
     var delCursor = require.toUrl('./img/cursor-delete.gif');
     
     var deleteIcon = require.toUrl('./img/delete-button.png');
     var addIcon = require.toUrl('./img/add-button.png');
+    var toolbarAddImages = require.toUrl('./img/add-images.png');
+    var toolbarEditImages = require.toUrl('./img/edit-images.png');
+    var toolbarDrawSketches = require.toUrl('./img/draw-sketches.png');
+    var toolbarMissionControl = require.toUrl('./img/mission-control.png');
+    var toolbarSidebar = require.toUrl('./img/sidebar.png');
 
     var initialize = true;
     
@@ -409,19 +416,19 @@ define(function (require, exports, module) {
         myPanel.append('<div class="tools" id="tools-' + id + '" style="height: ' + $(_activeEditor.getScrollerElement()).height() + 'px"></div>');
         
         $('#tools-' + id).append('<div class="seperator"></div>');
-        $('#tools-' + id).append("<a href='#' class='add-image button'>+</a> ");
-        $('#tools-' + id).append("<a href='#' class='image-layer edit'>edit</a> ");
+        $('#tools-' + id).append("<a href='#' class='add-image button' title='add images'></a> ");
+        $('#tools-' + id).append("<a href='#' class='image-layer edit' title='edit images'></a> ");
         //$('#tools-' + id).append("<a href='#' class='asyncScrolling button'>scroll</a> ");
-        $('#tools-' + id).append("<a href='#' class='redraw button'>redraw</a> ");
-        $('#tools-' + id).append("<a href='#' class='sketch-layer button'>sketch</a> ");
+        //$('#tools-' + id).append("<a href='#' class='redraw button'>redraw</a> ");
+        $('#tools-' + id).append("<a href='#' class='sketch-layer button' title='sketch'></a> ");
         
         var sketchingTools = $('<div class="sketching-tools"></div>');
         sketchingTools.append('<div class="seperator"></div>');
-        sketchingTools.append('<a href="#simple_sketch-' + id + '" data-undo="1" class="undo"></a>');
-        sketchingTools.append("<a href='#simple_sketch-" + id + "' data-clear='1' class='button'>clear</a> ");
+        sketchingTools.append('<a href="#simple_sketch-' + id + '" data-undo="1" class="undo" title="undo"></a>');
+        sketchingTools.append("<a href='#simple_sketch-" + id + "' data-clear='1' class='clear' title='clear'></a> ");
 
         
-        sketchingTools.append('<div class="seperator">Color</div>');
+        //sketchingTools.append('<div class="seperator">Color</div>');
         var colors = {
             'black': '#000000',
             'grey': '#B2ADA1',
@@ -438,7 +445,7 @@ define(function (require, exports, module) {
             }
         });
         sketchingTools.append('<a class="eraser" href="#simple_sketch-' + id + '" data-tool="eraser"></a>');
-        sketchingTools.append('<div class="seperator">Size</div>');
+        sketchingTools.append('<div class="seperator"></div>');
         var sizes = {
             'small': 5,
             'medium': 10,
@@ -456,7 +463,9 @@ define(function (require, exports, module) {
     }
 
     function _addToolbarIcon(id) {
-        $('#main-toolbar .buttons').prepend('<a href="#" id="toggle-sketching" title="SketchMeister"></a>');
+        $('#main-toolbar .buttons').append('<a href="#" id="toggle-missionControl" title="MissionControl"></a>');
+        $('#toggle-missionControl').css('background-image', 'url("' + missionControlDeactive + '")');
+        $('#main-toolbar .buttons').append('<a href="#" id="toggle-sketching" title="SketchMeister"></a>');
         $('#toggle-sketching').css('background-image', 'url("' + sketchIconDeactive + '")');
     }
     
@@ -997,7 +1006,7 @@ define(function (require, exports, module) {
     
     
     function MissionControl() {
-        this.overlay = $('<div id="missionControl"><div class="left controls"><a href="#" class="add"></a></div><div class="right controls"><a href="#" class="edit"></a></div></div>');
+        this.overlay = $('<div id="missionControl"><div class="top controls"><a href="#" class="esc"></a></div><div class="bottom controls"><a href="#" class="add"></a><a href="#" class="edit"></a></div></div>');
         this.active = false;
         this.editMode = false;
         this.stage = null;
@@ -1373,6 +1382,10 @@ define(function (require, exports, module) {
         $('#toggle-sketching').click(function () {
             _toggleStatus();
         });
+        
+        $('#toggle-missionControl').click(function () {
+            missionControl.toggle();
+        });
 
         $('.addImageToStage').click(function () {
             addImageToStage(testImage);
@@ -1400,6 +1413,16 @@ define(function (require, exports, module) {
         
         $('body').delegate('#missionControl .controls a.edit', 'click', function () {
             missionControl.toggleEditMode();
+        });
+        
+        $('body').delegate('#missionControl .controls a.esc', 'click', function () {
+            missionControl.toggle();
+        });
+        
+        $(document).keydown(function (e) {
+            if (e.keyCode === 27 && missionControl.active) { // ESC was pressed and MissionControl is active
+                missionControl.toggle();
+            }
         });
         
         $('body').delegate('#missionControl .controls a.zoomin', 'click', function () {
@@ -1553,7 +1576,7 @@ define(function (require, exports, module) {
             KeyBindingManager.addBinding(commandId, shortcut);
         }
 
-        registerCommandHandler("lukasspy.sketchmeister.toggleSketchmeister", "Enable Sketchmeister", _toggleStatus, "Ctrl-1");
+        registerCommandHandler("lukasspy.sketchmeister.toggleSketchmeister", "Enable SketchMeister", _toggleStatus, "Ctrl-1");
         registerCommandHandler("lukasspy.sketchmeister.toggleMissionControl", "Enable MissionControl", _toggleMissionControl, "Alt-1");
     }
 
