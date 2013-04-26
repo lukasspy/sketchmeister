@@ -65,12 +65,11 @@ define(function (require, exports, module) {
     
     var loadCSSPromise = ExtensionUtils.loadStyleSheet(module, 'css/main.css');
 
-    require('js/sketch');
-    require('js/json2');
-    require('js/functions');
     require('js/kinetic-v4.3.1');
     require('js/kinetic-functions');
     require('js/jquery-ui-1.10.0.custom.min');
+    require('js/sketch');
+    require('js/json2');
 
     /*----- xml functions -----*/
 
@@ -206,7 +205,7 @@ define(function (require, exports, module) {
                     
                     $('#tempImage').remove();
                     image.getLayer().draw();
-                    tempImageContainer = null;
+                    tempImageContainer.unload();
                 });
             });
         } else {
@@ -315,7 +314,7 @@ define(function (require, exports, module) {
                     
                     $('#tempImage').remove();
                     image.getLayer().draw();
-                    tempImageContainer = null;
+                    tempImageContainer.unload();
                 });
             });
         } else {
@@ -405,7 +404,7 @@ define(function (require, exports, module) {
             
             _activeSketchingArea.stage.draw();
             $('#tempImage').remove();
-            tempImageContainer = null;
+            tempImageContainer.unload();
         });
     }
 
@@ -1212,7 +1211,7 @@ define(function (require, exports, module) {
             
             $('#tempImage').remove();
             thisMissionControl.stage.draw();
-            tempImageContainer = null;
+            tempImageContainer.unload();
         });
         this.activateEditMode();
         
@@ -1220,8 +1219,6 @@ define(function (require, exports, module) {
     
     function resetAllVariables() {
         _sketchingAreaIdCounter = 0;
-        xmlData = "";
-        $xml = null;
         active = false;
         firstActivation = true;
 
@@ -1232,7 +1229,6 @@ define(function (require, exports, module) {
         _activeStage = "";
         _activeLayer = "sketch";
         imageLayer = "";
-        _codeMirror = null;
         allPaintingActions = [];
         missionControl = null;
     }
@@ -1315,8 +1311,11 @@ define(function (require, exports, module) {
             setTimeout(function () {
                 _projectClosed = false;
                 resetAllVariables();
-                readXmlFileData();
-                
+                readXmlFileData(function () {
+                    missionControl = new MissionControl();
+                    missionControl.init();
+                    currentDocumentChanged(true);
+                });
             }, 2000);
             
         });

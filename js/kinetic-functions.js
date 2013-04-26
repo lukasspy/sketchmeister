@@ -159,7 +159,7 @@ function unhighlightMissionControl(magnet) {
         magnet.transitionTo({
             scale: {x: 1.0,
                    y: 1.0},
-            duration: 0.2
+            duration: 0.1
         });
     }
 }
@@ -175,7 +175,7 @@ function unhighlightMissionControlFile(magnet) {
         magnet.transitionTo({
             scale: {x: 1.0,
                    y: 1.0},
-            duration: 0.2
+            duration: 0.1
         });
     }
 }
@@ -198,7 +198,7 @@ function highlightMissionControl(magnet, allMagnets) {
     magnet.transitionTo({
         scale: {x: 1.8,
                y: 1.8},
-        duration: 0.2
+        duration: 0.1
     });
 }
 
@@ -209,7 +209,7 @@ function highlightMissionControlFile(magnet) {
     magnet.transitionTo({
         scale: {x: 1.8,
                y: 1.8},
-        duration: 0.2
+        duration: 0.1
     });
 }
 
@@ -221,7 +221,7 @@ function highlight(magnet) {
     magnet.transitionTo({
         scale: {x: 1.8,
                y: 1.8},
-        duration: 0.2
+        duration: 0.1
     });
 }
 
@@ -232,7 +232,7 @@ function unhighlight(magnet) {
     magnet.transitionTo({
         scale: {x: 1.0,
                y: 1.0},
-        duration: 0.2
+        duration: 0.1
     });
 }
 
@@ -399,23 +399,23 @@ function addListenersToMissionControlMagnet(magnet, group) {
             }
         } else {
          // left mousebutton
+
+            var connection = JSON.parse(this.attrs.connection);
+            var fullProjectPath = ProjectManager.getProjectRoot().fullPath;
+            var documentToOpen = DocumentManager.getDocumentForPath(fullProjectPath + this.attrs.relativePath);
+            var thismagnet = this;
             
-            if (!this.clicked) {
-                var connection = JSON.parse(this.attrs.connection);
-                var fullProjectPath = ProjectManager.getProjectRoot().fullPath;
-                var documentToOpen = DocumentManager.getDocumentForPath(fullProjectPath + this.attrs.relativePath);
-                var thismagnet = this;
-                
-                if (connection.start.line > 0 && connection.end.line > 0) {
-                    highlightMissionControl(thismagnet, missionControl.stage.get(".magnet"));
-                } else {
-                    highlightMissionControlFile(thismagnet);
-                }
-                setTimeout(function () {
-                    //wait for the animation to show feedback
-                    thismagnet.clicked = true;
-                    missionControl.toggle();
-                    documentToOpen.then(
+            if (connection.start.line > 0 && connection.end.line > 0) {
+                highlightMissionControl(thismagnet, missionControl.stage.get(".magnet"));
+            } else {
+                highlightMissionControlFile(thismagnet);
+            }
+            setTimeout(function () {
+                missionControl.toggle();
+            }, 120); 
+            setTimeout(function () {
+                thismagnet.clicked = true;
+                documentToOpen.then(
                         function (object) {
                             DocumentManager.setCurrentDocument(object);
                             DocumentManager.addToWorkingSet(object.file);
@@ -450,16 +450,9 @@ function addListenersToMissionControlMagnet(magnet, group) {
                             console.log(documentToOpen);
                         }
                     );
-                }, 600);
-            } else {
-                $(".magnet-" + this._id).removeClass("selectionLinkFromMissionControl");
-                if (activeMarker[this._id]) {
-                    activeMarker[this._id].clear();
-                }
-                unhighlightMissionControl(this);
-                this.clicked = false;
-            }
-            
+            }, 100);
+            //wait for the animation to show feedback
+                       
         }
     });
 
