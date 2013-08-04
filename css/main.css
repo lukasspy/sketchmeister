@@ -72,7 +72,6 @@
 
 #missionControl .left {
     left: 15px; 
-    
 }
 
 #missionControl .right {
@@ -142,7 +141,7 @@
 }
 .tools {
     position: fixed;
-    top: 100px;
+    top: 140px;
     right: 0;
     width: 30px;
     z-index: 40;
@@ -153,6 +152,7 @@
     font-family: SourceSansPro, Helvetica, Arial, 'MS PGothic', sans-serif;
     letter-spacing: .01em;
 }
+
 .tools a {
     vertical-align: middle;
     text-align: center;
@@ -161,6 +161,7 @@
     color: #bbb;
     line-height: 20px;
 }
+
 .tools a.undo {
     height: 20px;
     width: 20px;
@@ -205,23 +206,27 @@
     box-shadow: inset 1px 1px 4px rgba(0, 0, 0, 0.3);
     background: transparent url('../img/eraser-transparent.png') center right no-repeat;
 }
+
 .tools a.eraser.selected {
     border-top: 2px solid #eee;
     border-bottom: 2px solid #eee;
     box-shadow: inset 1px 1px 2px rgba(0, 0, 0, 0.6);
 }
+
 .tools a.button, .tools a.edit, .tools a.size {
     height: 20px;
     border-bottom: 1px solid transparent;
     border-top: 1px solid transparent;
     width: 100%;
 }
+
 .tools a.edit.selected, .tools a.size.selected, .tools a.asyncScrolling.selected, .tools a.button:active, .tools a.sketch-layer.selected {
     background-color: #36393A;
     border-bottom: 1px solid #525657;
     border-top: 1px solid #2C2E2F;
     color: white;
 }
+
 .tools a.color {
     height: 20px;
     margin: 3px 0px;
@@ -230,11 +235,13 @@
     border-bottom: 2px solid #36393A;
     box-shadow: inset 1px 1px 4px rgba(0, 0, 0, 0.3);
 }
+
 .tools a.color.selected {
     border-top: 2px solid #ccc;
     border-bottom: 2px solid #ccc;
     box-shadow: inset 1px 1px 2px rgba(0, 0, 0, 0.6);
 }
+
 .tools .seperator {
     margin-top: 10px;
     text-align: center;
@@ -242,11 +249,13 @@
     height: 20px;
     color: #878787;
 }
+
 #toggle-sketching, #toggle-missionControl {
     display: inline-block;
     height: 20px;
     width: 22px;
 }
+
 .back-transparent {
     background-color: transparent;
 }

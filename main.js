@@ -1,5 +1,5 @@
 /*jslint vars: true, plusplus: true, devel: true, nomen: true, regexp: true, indent: 4, maxerr: 50, browser: true*/
-/*global define, $, brackets, window, CodeMirror, _toggleStatus, document, Kinetic, addImageToStage, addAnchor, addMissionControlAnchor, unhighlightMissionControl, highlightMissionControl, addMissionControlMarker, allAnchors, addListenersToAnchor, addListenersToMissionControlAnchor, addDeleteAnchor, showAnchors, hideAnchors, addListenersToMagnet, addListenersToMissionControlMagnet, addMarker, removeMarker, highlight, unhighlight, recalculateStartAndEndOfConnection, unhighlightMissionControlFile, highlightMissionControlFile */
+/*global define, $, brackets, window, CodeMirror, _toggleStatus, document, Kinetic, _addImageToStage, _addAnchor, _addMissionControlAnchor, _unhighlightMissionControl, _highlightMissionControl, _addMissionControlMarker, _allAnchors, _addListenersToAnchor, _addListenersToMissionControlAnchor, _showAnchors, _hideAnchors, _addListenersToMagnet, _addListenersToMissionControlMagnet, _addMarker, _removeMarker, _highlight, _unhighlight, _recalculateStartAndEndOfConnection, _unhighlightMissionControlFile, _highlightMissionControlFile */
 
 var xmlFilename = "sketchmeister.xml";
 var panelSize = 2;
@@ -7,7 +7,7 @@ var panelSize = 2;
 var myPanel = $('<div id="myPanel"></div>');
 var missionControl;
 
-var asyncScroll = false;
+var _asyncScroll = false;
 var mouseOverPanel = false;
 
 var _sketchingAreaIdCounter = 0;
@@ -25,7 +25,7 @@ var _activeLayer = "image";
 var imageLayer;
 var _codeMirror = null;
 var _projectClosed = false;
-var activeMarker = [];
+var _activeMarker = [];
 var allPaintingActions = [];
 
 var addedListeners = [];
@@ -49,6 +49,7 @@ define(function (require, exports, module) {
 
     var initialize = true;
     
+    // load all needed modules
     var CommandManager = brackets.getModule("command/CommandManager"),
         ProjectManager = brackets.getModule("project/ProjectManager"),
         EditorManager = brackets.getModule("editor/EditorManager"),
@@ -63,6 +64,7 @@ define(function (require, exports, module) {
         KeyBindingManager = brackets.getModule("command/KeyBindingManager"),
         Dialogs = brackets.getModule("widgets/Dialogs");
     
+    // load the CSS
     var loadCSSPromise = ExtensionUtils.loadStyleSheet(module, 'css/main.css');
 
     require('js/kinetic-v4.3.1');
@@ -73,43 +75,79 @@ define(function (require, exports, module) {
 
     /*----- xml functions -----*/
 
+    /**
+    * Add a new xml element
+    *
+    * @param {String} name of the new element
+    * @method createElement
+    * @return {DomELement} returns the node
+    */
     $.createElement = function (name) {
         return $('<' + name + ' />');
     };
 
-    function createProjectNode(fullPathOfProject) {
+    /**
+    * Add a new node for a new project
+    *
+    * @param {String} full path of the new project
+    * @method createProjectNode
+    */
+    function _createProjectNode(fullPathOfProject) {
         xmlData = $('<root><project fullPath="' + fullPathOfProject + '"/></root>');
         $xml = $(xmlData);
     }
 
-    function createFileNode(filename, relativePath) {
+    /**
+    * Create a new file node with two attributes: filename and realtive path of the file
+    *
+    * @param {String} filename
+    * @param {String} relative path of the file
+    * @method createFileNode
+    * @return {DomELement} returns the node
+    */
+    function _createFileNode(filename, relativePath) {
         var newFile = $.createElement("file");
         newFile.attr("filename", filename).attr("path", relativePath);
         return newFile;
     }
 
-    /*----- sketch.js functionen -----*/
-
-    function sketchGetURL() {
-        var canvas = $('#simple_sketch-' + _activeSketchingArea.id)[0];
-        var sketchDataURL = canvas.toDataURL();
-    }
-
     /*----- functions for kinetic drag/resize ------*/
 
-    function moveToolsToTop() {
+    
+    /**
+    * Move the tools in the sidebar to the top by changing the z-index
+    *
+    * @method _moveToolsToTop
+    */
+    function _moveToolsToTop() {
         $('.tools').css('z-index', '5');
     }
 
-    function moveImageLayerToTop() {
+    /**
+    * Move the image layer to the top by: 
+    *   - setting the z-index of both the image layer and the sketching layer accordingly
+    *   - hiding the sketching tools
+    *   - setting the image layer as the active layer 
+    *
+    * @method _moveImageLayerToTop
+    */
+    function _moveImageLayerToTop() {
         //Anchor einblenden
         $('.kineticjs-content').css('z-index', '5');
         $('.simple_sketch').css('z-index', '3');
         $('.sketching-tools').hide();
         _activeLayer = "image";
     }
-
-    function moveSketchingAreaToTop() {
+    
+    /**
+    * Move the sketching layer to the top by: 
+    *   - setting the z-index of both the image layer and the sketching layer accordingly
+    *   - showing the sketching tools
+    *   - setting the sketching layer as the active layer 
+    *
+    * @method _moveSketchingAreaToTop
+    */
+    function _moveSketchingAreaToTop() {
         //Anchor ausblenden
         $('.simple_sketch').css('z-index', '5');
         $('.kineticjs-content').css('z-index', '3');
@@ -117,7 +155,20 @@ define(function (require, exports, module) {
         _activeLayer = "sketch";
     }
 
-    function createStage(container, width, height, path, filename) {
+    /**
+    * A kinetic.js-stage is created to manage the images and connection dots of a particular file.
+    *   - a new stage is created if there is no data for the particular file in the xml or a stage is re-created out of saved data from the xml file
+    *   - in case of the ladder: the images have to be actively linked and reloaded into the DOM. Resize anchors are created and listeners are registered.
+    *
+    * @param {DomELement} the id of a DomElement in which the kinetic.js-stage is created (e.g. cont, if <div id="cont"/>)
+    * @param {Number} width of the stage
+    * @param {Number} height of the stage
+    * @param {String} full path of the file for which the stage is created
+    * @param {String} filename of the file for which the stage is created
+    * @method _createStage
+    * @return {Object} returns the stage
+    */
+    function _createStage(container, width, height, path, filename) {
         // check if stage-data is in the xml-variable,
         // yes: create a stage out of the JSON-data in xml-variable 
         // no: create empty stage
@@ -155,7 +206,7 @@ define(function (require, exports, module) {
                     $.each(anchors, function (key, anchor) {
                         
                         anchor.setImage(imageObj);
-                        addListenersToAnchor(anchor, group);
+                        _addListenersToAnchor(anchor, group);
                     });
 
                     anchors = group.get(".topRight");
@@ -163,26 +214,26 @@ define(function (require, exports, module) {
                     imageObj.src = addIcon;
                     $.each(anchors, function (key, anchor) {
                         anchor.setImage(imageObj);
-                        addListenersToAnchor(anchor, group);
+                        _addListenersToAnchor(anchor, group);
                     });
                     
                     anchors = group.get(".bottomRight");
                     $.each(anchors, function (key, anchor) {
-                        addListenersToAnchor(anchor, group);
+                        _addListenersToAnchor(anchor, group);
 
                     });
                     
                     anchors = group.get(".bottomLeft");
                     $.each(anchors, function (key, anchor) {
-                        addListenersToAnchor(anchor, group);
+                        _addListenersToAnchor(anchor, group);
                     });
                 
-                    hideAnchors(stage);
+                    _hideAnchors(stage);
                     var magnets = group.get(".magnet");
                     $.each(magnets, function (key, magnet) {
                         magnet.setDraggable(false);
-                        addMarker(JSON.parse(magnet.attrs.connection), magnet._id);
-                        addListenersToMagnet(magnet, group);
+                        _addMarker(JSON.parse(magnet.attrs.connection), magnet._id);
+                        _addListenersToMagnet(magnet, group);
                     });
                     image.setImage(tempImage);
                     
@@ -223,7 +274,18 @@ define(function (require, exports, module) {
         return stage;
     }
     
-    function createStageForMissionControl(container, width, height) {
+    /**
+    * A kinetic.js-stage is created to manage the images and connection dots of the Mission Control.
+    *   - a new stage is created if there is no data for the MissionControl in the xml or a stage is re-created out of saved data from the xml file
+    *   - in case of the ladder: the images have to be actively linked and reloaded into the DOM. Resize anchors are created and listeners are registered.
+    *
+    * @param {DomELement} the id of a DomElement in which the kinetic.js-stage is created (e.g. cont, if <div id="cont"/>)
+    * @param {Number} width of the stage
+    * @param {Number} height of the stage
+    * @method _createStageForMissionControl
+    * @return {Object} returns the stage
+    */
+    function _createStageForMissionControl(container, width, height) {
         var stage;
         var fullProjectPath = ProjectManager.getProjectRoot().fullPath;
         var missionControlAsJSON = $xml.find("project").find("missioncontrol");
@@ -257,7 +319,7 @@ define(function (require, exports, module) {
                     imageObj.src = deleteIcon;
                     $.each(anchors, function (key, anchor) {
                         anchor.setImage(imageObj);
-                        addListenersToMissionControlAnchor(anchor, group);
+                        _addListenersToMissionControlAnchor(anchor, group);
                     });
 
                     anchors = group.get(".topRight");
@@ -266,22 +328,22 @@ define(function (require, exports, module) {
                     imageObj.src = addIcon;
                     $.each(anchors, function (key, anchor) {
                         anchor.setImage(imageObj);
-                        addListenersToMissionControlAnchor(anchor, group);
+                        _addListenersToMissionControlAnchor(anchor, group);
                     });
                     
                     anchors = group.get(".bottomRight");
                     $.each(anchors, function (key, anchor) {
-                        addListenersToMissionControlAnchor(anchor, group);
+                        _addListenersToMissionControlAnchor(anchor, group);
                     });
                     
                     anchors = group.get(".bottomLeft");
                     $.each(anchors, function (key, anchor) {
-                        addListenersToMissionControlAnchor(anchor, group);
+                        _addListenersToMissionControlAnchor(anchor, group);
                     });
                     
                     var magnets = group.get(".magnet");
                     $.each(magnets, function (key, magnet) {
-                        unhighlightMissionControl(magnet);
+                        _unhighlightMissionControl(magnet);
                         var JSONconnection = JSON.parse(magnet.attrs.connection);
                         if (JSONconnection.start.line === 0 && JSONconnection.end.line === 0) {
                             magnet.setStroke('rgba(47, 31, 74, 1)');
@@ -289,7 +351,7 @@ define(function (require, exports, module) {
                         }
                         magnet.setRadius(12);
                         magnet.attrs.clicked = false;
-                        addListenersToMissionControlMagnet(magnet, group);
+                        _addListenersToMissionControlMagnet(magnet, group);
                     });
                     
                     image.setImage(tempImage);
@@ -328,7 +390,17 @@ define(function (require, exports, module) {
         return stage;
     }
 
-    function addImageToStage(imageToAdd) {
+    /**
+    * An image is added to the stage
+    *   - the image is loaded into the DOM
+    *   - the image is resized to fit the stage width if necessary
+    *   - anchors are added to the image
+    *   - if the image-path is similar to the project-path the path is made relative to support portability of project
+    *
+    * @param {String} the full path and filename of an image
+    * @method _addImageToStage
+    */
+    function _addImageToStage(imageToAdd) {
         var widthOfImage;
         var heightOfImage;
         var tempImage = new Image();
@@ -337,7 +409,6 @@ define(function (require, exports, module) {
         //check if image is in the project folder, if yes set relative true
         var updatedPath = imageToAdd.replace(fullProjectPath, "");
         var relative = (imageToAdd !== updatedPath) ? true : false;
-        console.log(relative + " and the path is: " + updatedPath);
         var tempImageContainer = $('<img src="' + imageToAdd + '" id="tempImage" class="visibility: hidden"/>');
         tempImageContainer.load(function () {
             $(this).appendTo('#sidebar');
@@ -345,7 +416,7 @@ define(function (require, exports, module) {
             widthOfImage = tempImage.width;
             heightOfImage = tempImage.height;
 
-            moveImageLayerToTop();
+            _moveImageLayerToTop();
             var widthResized = (myPanel.width() * 0.7);
             var heightResized = (myPanel.width() * 0.7) / widthOfImage * heightOfImage;
             if (widthResized > widthOfImage) {
@@ -394,10 +465,10 @@ define(function (require, exports, module) {
             var thisImageLayer = _activeSketchingArea.stage.getChildren()[0];
             thisImageLayer.add(imageGroup);
 
-            addAnchor(imageGroup, 0, 0, 'topLeft', deleteIcon);
-            addAnchor(imageGroup, widthResized, 0, 'topRight', addIcon);
-            addAnchor(imageGroup, widthResized, heightResized, 'bottomRight');
-            addAnchor(imageGroup, 0, heightResized, 'bottomLeft');
+            _addAnchor(imageGroup, 0, 0, 'topLeft', deleteIcon);
+            _addAnchor(imageGroup, widthResized, 0, 'topRight', addIcon);
+            _addAnchor(imageGroup, widthResized, heightResized, 'bottomRight');
+            _addAnchor(imageGroup, 0, heightResized, 'bottomLeft');
             imageGroup.on('dragstart', function () {
                 this.moveToTop();
             });
@@ -410,7 +481,12 @@ define(function (require, exports, module) {
 
     /*----- functions for sketching area ------*/
 
-
+    /**
+    * UI elements of the side panel are created and loaded into the DOM
+    *
+    * @param {String} the id of the div-container that is created for a particular sketching area
+    * @method _addSketchingTools
+    */
     function _addSketchingTools(id) {
         var height = $(_activeEditor.getScrollerElement()).height() - 100;
         myPanel.append('<div class="tools" id="tools-' + id + '" style="height: ' + height + 'px"></div>');
@@ -456,15 +532,30 @@ define(function (require, exports, module) {
         });
         $('#tools-' + id).append(sketchingTools);
     }
-
-    function _addToolbarIcon(id) {
+    
+    /**
+    * Toolbar icons are added to the Brackets toolbar
+    *   - icon to toggle MissionControl
+    *   - icon to toggle SketchMeister
+    *
+    * @method _addToolbarIcon
+    */
+    function _addToolbarIcon() {
         $('#main-toolbar .buttons').append('<a href="#" id="toggle-missionControl" title="MissionControl"></a>');
         $('#toggle-missionControl').css('background-image', 'url("' + missionControlDeactive + '")');
         $('#main-toolbar .buttons').append('<a href="#" id="toggle-sketching" title="SketchMeister"></a>');
         $('#toggle-sketching').css('background-image', 'url("' + sketchIconDeactive + '")');
     }
     
-    function getSketchingActionsForThisFileFromXml(filename, relativePath) {
+    /**
+    * The sketching actions for a particular file are returned from the xml file
+    *
+    * @param {String} filename
+    * @param {String} relative path of the file
+    * @method _getSketchingActionsForThisFileFromXml
+    * @return {Array} an empty array or a JSON string with the actions (history of strokes)
+    */
+    function _getSketchingActionsForThisFileFromXml(filename, relativePath) {
         var actions = $xml.find("file[filename='" + filename + "'][path='" + relativePath + "']").find("sketchingactions");
         // check if there are actions for this sketchingArea
         // if yes then parse the JSON string and return else return an empty array -> default if no actions
@@ -475,7 +566,16 @@ define(function (require, exports, module) {
         }
     }
     
-    function getStageObjectForThisFileFromXml(id, filename, relativePath) {
+    /**
+    * Gets the stage object from the xml file for particular file and recreates the stage object
+    *
+    * @param {String} id of the DOM container in which the stage is placed
+    * @param {String} filename
+    * @param {String} relative path of the file
+    * @method _getStageObjectForThisFileFromXml
+    * @return {Object} the stage or false
+    */
+    function _getStageObjectForThisFileFromXml(id, filename, relativePath) {
         var stageObject = $xml.find("file[filename='" + filename + "'][path='" + relativePath + "']").find("stage");
         // check if there is a stage for this sketchingArea
         // if yes then parse the JSON string and return else return an flse -> default creating empty stage
@@ -487,41 +587,61 @@ define(function (require, exports, module) {
         }
     }
     
-    function loadSketchingActionsFromXmlToSketchingArea() {
+    /**
+    * Loads the sketching actions from the xml file to the sketching area.
+    *   - gets the sketching action history
+    *   - redraws the sketchingArea to show the strokes
+    *
+    * @method _loadSketchingActionsFromXmlToSketchingArea
+    */
+    function _loadSketchingActionsFromXmlToSketchingArea() {
         var filename = DocumentManager.getCurrentDocument().file.name;
         var fullProjectPath = ProjectManager.getProjectRoot().fullPath;
         var relativePath = _activeSketchingArea.fullPath.replace(fullProjectPath, "").replace(filename, "");
-        var actions = getSketchingActionsForThisFileFromXml(filename, relativePath);
+        var actions = _getSketchingActionsForThisFileFromXml(filename, relativePath);
         _activeSketchingArea.sketchArea.actions = actions;
         if (actions.length > 0) {
             _activeSketchingArea.sketchArea.redraw();
         }
     }
-    
-    function loadStageObjectFromXmlToStage() {
-        var filename = DocumentManager.getCurrentDocument().file.name;
-        var fullProjectPath = ProjectManager.getProjectRoot().fullPath;
-        var relativePath = _activeSketchingArea.fullPath.replace(fullProjectPath, "").replace(filename, "");
-        
-        var stageObject = getStageObjectForThisFileFromXml(filename, relativePath);
-        if (stageObject) {
-            _activeSketchingArea.stage = stageObject;
-            _activeSketchingArea.stage.draw();
-        }
-    }
-       
+
+    /**
+    * Deactivate the tools
+    *   - hide the tool-container
+    *   - change sketch icon in Brackets toolbar
+    *
+    * @method _deactivate
+    */
     function _deactivate() {
         $(".tools").hide();
         $('#toggle-sketching').css('background-image', 'url("' + sketchIconDeactive + '")');
         active = false;
     }
 
+    /**
+    * Activate the tools
+    *   - show the tool-container
+    *   - change sketch icon in Brackets toolbar
+    *
+    * @method _deactivate
+    */
     function _activate() {
         $(".tools").show();
         $('#toggle-sketching').css('background-image', 'url("' + sketchIconActive + '")');
         active = true;
     }
 
+    /**
+    * Adds the sketching area including a Kinetic.js-stage
+    *   - the width of the sketching area is set to a fixed width of 1500
+    *   - the overlay is added to the panel
+    *   - sketching area and stage is added
+    *
+    * @param {String} fullpath of the file
+    * @param {String} filename
+    * @method _addSketchingArea
+    * @return {Object} the amount of registered sketching areas
+    */
     function _addSketchingArea(path, filename) {
         var id = _sketchingAreaIdCounter++;
         var height = $(_activeEditor.getScrollerElement()).height();
@@ -538,7 +658,7 @@ define(function (require, exports, module) {
         var sketchArea = $('#simple_sketch-' + id).sketch();
 
         _addSketchingTools(id);
-        var stage = createStage('overlay-' + id, myPanel.width(), totalHeight, path, filename);
+        var stage = _createStage('overlay-' + id, myPanel.width(), totalHeight, path, filename);
         var sketchingArea = {
             'filename': filename,
             'fullPath': path,
@@ -552,7 +672,6 @@ define(function (require, exports, module) {
 
         if (!active) {
             _deactivate();
-            //console.log('wurde deaktiviert');
         }
         var length = _documentSketchingAreas.push(sketchingArea);
         return length - 1;
@@ -561,12 +680,17 @@ define(function (require, exports, module) {
     var ignoreScrollEventsFromPanel = false;
     var ignoreScrollEventsFromEditor = false;
     
+    /**
+    * Scroll the SketchMeister panel if editor container is scrolled to support synchronized scrolling.
+    *
+    * @method _scroll
+    */
     function _scroll() {
         var ignore = ignoreScrollEventsFromEditor;
         ignoreScrollEventsFromEditor = false;
         if (ignore) {
             return false;
-        } else if (!asyncScroll) {
+        } else if (!_asyncScroll) {
             var scrollPos = _activeEditor.getScrollPos();
             ignoreScrollEventsFromPanel = true;
             if ($('#myPanel').scrollTop() !== scrollPos.y) {
@@ -575,12 +699,17 @@ define(function (require, exports, module) {
         }
     }
 
+    /**
+    * Scroll the editor container if the SketchMeister panel is scrolled to support synchronized scrolling.
+    *
+    * @method _scrollEditor
+    */
     function _scrollEditor() {
         var ignore = ignoreScrollEventsFromPanel;
         ignoreScrollEventsFromPanel = false;
         if (ignore) {
             return false;
-        } else if (!asyncScroll) {
+        } else if (!_asyncScroll) {
             var scrollPos = $('#myPanel').scrollTop();
             ignoreScrollEventsFromEditor = true;
             if (_activeEditor.getScrollPos().y !== scrollPos) {
@@ -589,19 +718,18 @@ define(function (require, exports, module) {
         }
     }
     
-    function whereIsThePointInRelationToTwoOtherPoints(point, from, to) {
-        // -1 before < 0 inside < 1 after
-        
-        if (to < point) {
-            return 1; //after
-        } else if (point < from) {
-            return -1; //before
-        } else {
-            return 0; //inside
-        }
-    }
-    
-    function addListenersToEditor(editor, fullPath, initialize) {
+    /**
+    * Add listeners to the editor container
+    *   - adds the listeners to recalculate the connection if the file is changed
+    *   - adds the listeners to the line numbers to connect them to the connection dots
+    *
+    * @param {Object} editor
+    * @param {String} fullpath of the file
+    * @param {Boolean} initialize
+    * @method _addListenersToEditor
+    * @return {Boolean} return if this document is opened for the first time to know if listeners have to be added
+    */
+    function _addListenersToEditor(editor, fullPath, initialize) {
         if (!initialize) {
             var listenersAlreadyAdded = false;
             $.each(addedListeners, function (key, addedListener) {
@@ -618,7 +746,7 @@ define(function (require, exports, module) {
         editor._codeMirror.on("change", function (cm, change) {
             var magnets = _activeStage.get(".magnet");
             $.each(magnets, function (pos, magnet) {
-                var reCalculatedConnection = recalculateStartAndEndOfConnection(magnet, cm, change, 0);
+                var reCalculatedConnection = _recalculateStartAndEndOfConnection(magnet, cm, change, 0);
                 if (reCalculatedConnection) {
                     magnet.attrs.connection = reCalculatedConnection;
                 } else {
@@ -629,7 +757,7 @@ define(function (require, exports, module) {
             
             magnets = missionControl.stage.get(".magnet");
             $.each(magnets, function (pos, magnet) {
-                var reCalculatedConnection = recalculateStartAndEndOfConnection(magnet, cm, change, 1);
+                var reCalculatedConnection = _recalculateStartAndEndOfConnection(magnet, cm, change, 1);
                 if (reCalculatedConnection) {
                     magnet.attrs.connection = reCalculatedConnection;
                 } else {
@@ -651,21 +779,20 @@ define(function (require, exports, module) {
                             foundMagnetInNormalStage++;
                             if (magnet.clicked) {
                                 // mark in text is set, so lets clear and delete the mark-reference
-                                unhighlight(magnet);
+                                _unhighlight(magnet);
                                 magnet.clicked = false;
-                                if (activeMarker[magnet._id]) {
-                                    activeMarker[magnet._id].clear();
+                                if (_activeMarker[magnet._id]) {
+                                    _activeMarker[magnet._id].clear();
                                 }
                                 $(".magnet-" + magnet._id).removeClass('selectionLink');
-                                delete (activeMarker[magnet._id]);
-                                asyncScroll = true;
+                                delete (_activeMarker[magnet._id]);
+                                _asyncScroll = true;
                                 myPanel.animate({ scrollTop: $(_activeEditor.getScrollerElement()).scrollTop() }, 700);
                                 setTimeout(function () {
-                                    asyncScroll = false;
+                                    _asyncScroll = false;
                                 }, 750);
                             } else {
                                 // no mark in text, so lets get the magnet and mark corresponding text
-                                //console.log(magnet);
                                 var editorHeight = $(_activeEditor.getScrollerElement()).height();
                                 var editorFirstVisiblePixel = _activeEditor.getScrollPos().y;
                                 var editorLastVisiblePixel = editorFirstVisiblePixel + editorHeight;
@@ -686,24 +813,23 @@ define(function (require, exports, module) {
                                     timeout = 100;
                                 }
                                 setTimeout(function () {
-                                    highlight(magnet);
+                                    _highlight(magnet);
                                     magnet.clicked = true;
                                     $(".magnet-" + magnet._id).addClass("selectionLink");
                                     var connection = JSON.parse(magnet.attrs.connection);
-                                    //console.log(connection);
-                                    activeMarker[magnet._id] = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLink'});
+                                    _activeMarker[magnet._id] = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLink'});
                                     if (offscreenLocation === "bottom") {
                                         var scrollPos = magnetsGroupFirstPixel - (editorHeight - groupHeight);
-                                        asyncScroll = true;
+                                        _asyncScroll = true;
                                         myPanel.animate({ scrollTop: scrollPos }, 700);
                                         setTimeout(function () {
-                                            asyncScroll = false;
+                                            _asyncScroll = false;
                                         }, 750);
                                     } else if (offscreenLocation === "top") {
-                                        asyncScroll = true;
+                                        _asyncScroll = true;
                                         myPanel.animate({ scrollTop: magnetsGroupFirstPixel - 10 }, 700);
                                         setTimeout(function () {
-                                            asyncScroll = false;
+                                            _asyncScroll = false;
                                         }, 750);
                                     }
                                 }, timeout);
@@ -716,31 +842,41 @@ define(function (require, exports, module) {
                         $.each(magnets, function (pos, magnet) {
                             if (magnet._id === value.name) {
                                 if (magnet.clicked) {
-                                    unhighlightMissionControl(magnet);
+                                    _unhighlightMissionControl(magnet);
                                     magnet.clicked = false;
-                                    if (activeMarker[magnet._id]) {
-                                        activeMarker[magnet._id].clear();
+                                    if (_activeMarker[magnet._id]) {
+                                        _activeMarker[magnet._id].clear();
                                     }
                                     $(".magnet-" + magnet._id).removeClass('selectionLinkFromMissionControl');
-                                    delete (activeMarker[magnet._id]);
+                                    delete (_activeMarker[magnet._id]);
                                 } else {
-                                    highlightMissionControl(magnet, magnets);
+                                    _highlightMissionControl(magnet, magnets);
                                     magnet.clicked = true;
                                     $(".magnet-" + magnet._id).addClass("selectionLinkFromMissionControl");
                                     var connection = JSON.parse(magnet.attrs.connection);
-                                    activeMarker[magnet._id] = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLinkFromMissionControl'});
+                                    _activeMarker[magnet._id] = _activeEditor._codeMirror.markText(connection.start, connection.end, {className : 'selectionLinkFromMissionControl'});
                                 }
                             }
                         });
                     }
                 });
-            } else {
-                console.log("keine markierung");
             }
         });
         return true;
     }
 
+    /**
+    * Manages everything when the current docment is changed
+    *   - set all variables accordingly
+    *   - add a marker on a line number if there is a connection to the MissionControl
+    *   - created a new sketching area or load if documents was open already
+    *   - show/redraw sketching areas and stage
+    *   - scroll to correct position (Brackets saves the last scroll position on closing a document)
+    *
+    * @param {Boolean} initialize
+    * @method currentDocumentChanged
+    * @return {Boolean} 
+    */
     function currentDocumentChanged(initialize) {
         // some default stuff
         _activeEditor = EditorManager.getCurrentFullEditor();
@@ -756,7 +892,7 @@ define(function (require, exports, module) {
         var magnets = missionControl.stage.get(".magnet");
         $.each(magnets, function (key, magnet) {
             if (relativePath === magnet.attrs.relativePath) {
-                addMissionControlMarker(JSON.parse(magnet.attrs.connection), magnet._id);
+                _addMissionControlMarker(JSON.parse(magnet.attrs.connection), magnet._id);
             }
         });
         
@@ -764,14 +900,14 @@ define(function (require, exports, module) {
         $.each(magnets, function (pos, magnet) {
             var JSONconnection = JSON.parse(magnet.attrs.connection);
             if (JSONconnection.start.line === 0 && JSONconnection.end.line === 0) {
-                unhighlightMissionControlFile(magnet);
+                _unhighlightMissionControlFile(magnet);
                 if (relativePath === magnet.attrs.relativePath) {
-                    highlightMissionControlFile(magnet);
+                    _highlightMissionControlFile(magnet);
                 }
             }
         });
         
-        thisFileIsOpenedForFirstTime = addListenersToEditor(EditorManager.getCurrentFullEditor(), _activeFullPath, initialize);
+        thisFileIsOpenedForFirstTime = _addListenersToEditor(EditorManager.getCurrentFullEditor(), _activeFullPath, initialize);
       
         // go through all already opened sketchingAreas and check if opened file already has a sketchingArea  
         var foundSketchingArea = -1;
@@ -797,12 +933,12 @@ define(function (require, exports, module) {
             _activeSketchingArea = _documentSketchingAreas[key];
             // check which layer is on top to stay in sync with other already open sketching areas
             if (_activeLayer === "sketch") {
-                moveSketchingAreaToTop();
+                _moveSketchingAreaToTop();
             } else {
-                moveImageLayerToTop();
+                _moveImageLayerToTop();
             }
             //sketchingArea has been created and now the xml-file has to be checked if there are sketchingActions for that file
-            loadSketchingActionsFromXmlToSketchingArea();
+            _loadSketchingActionsFromXmlToSketchingArea();
         }
         
         // set the active stage by referencing the stage of the active sketchingArea
@@ -816,12 +952,23 @@ define(function (require, exports, module) {
         //when document is changed the editor position was stored, so the panel needs to be synced on reentering
         myPanel.scrollTop(_activeEditor.getScrollPos().y);
     }
-
-    function deleteSketchingArea(id) {
+    
+    /**
+    * Delete a skething Area from the array of all registered sketching areas
+    *
+    * @param {number} id of the sketching area
+    * @method _deleteSketchingArea
+    */
+    function _deleteSketchingArea(id) {
         _documentSketchingAreas.splice(id, 1);
     }
 
-    function removeOverlay() {
+    /**
+    * Remove the sketching area if a document is closed and removed from the working set
+    *
+    * @method _removeOverlay
+    */
+    function _removeOverlay() {
         var _activeWorkingSet = DocumentManager.getWorkingSet();
         var sketchingAreaToDelete;
         $.each(_documentSketchingAreas, function (keySketchingArea, sketchingArea) {
@@ -835,37 +982,56 @@ define(function (require, exports, module) {
                 sketchingAreaToDelete = keySketchingArea;
             }
         });
-        deleteSketchingArea(sketchingAreaToDelete);
-    }
-    
-    function checkIfXMLFileExists(path) {
-        NativeFileSystem.resolveNativeFileSystemPath(path + xmlFilename, function (entry) {
-            return true;
-        }, function (err) {
-            return false;
-        });
+        _deleteSketchingArea(sketchingAreaToDelete);
     }
 
-    function checkIfFileNodeExists(filename, relativePath) {
+    /**
+    * Check if the file node exists
+    *
+    * @param {String} filename
+    * @param {String} relative path of the file
+    * @method _checkIfFileNodeExists
+    * @return {Object} returns a jQuery collection which contains only the list elements that are descendants of corresponding item
+    */
+    function _checkIfFileNodeExists(filename, relativePath) {
         return $xml.find("file[filename='" + filename + "'][path='" + relativePath + "']");
     }
 
-    function checkIfSketchingNodeForFileNodeExists(filename, relativePath) {
-        return $xml.find("file[filename='" + filename + "'][path='" + relativePath + "'] sketchactions");
-    }
-
-    function setSketchingActionsAtNode(sketchingActionsAsJSON, filename, relativePath) {
+    /**
+    * Set the sketching actions at the corresponding xml node
+    *
+    * @param {String} sketching actions as JSON string
+    * @param {String} filename
+    * @param {String} relative path of the file
+    * @method _setSketchingActionsAtNode
+    */
+    function _setSketchingActionsAtNode(sketchingActionsAsJSON, filename, relativePath) {
         $xml.find("file[filename='" + filename + "'][path='" + relativePath + "']").children("sketchingactions").remove();
         $xml.find("file[filename='" + filename + "'][path='" + relativePath + "']").append("<sketchingactions>" + sketchingActionsAsJSON + "</sketchingactions>");
     }
     
-    function setStageObjectAtNode(stageObjectAsJSON, filename, relativePath) {
+    /**
+    * Set the stage object at the corresponding xml node
+    *
+    * @param {String} stage object as JSON string
+    * @param {String} filename
+    * @param {String} relative path of the file
+    * @method _setStageObjectAtNode
+    */
+    function _setStageObjectAtNode(stageObjectAsJSON, filename, relativePath) {
         $xml.find("file[filename='" + filename + "'][path='" + relativePath + "']").children("stage").remove();
         $xml.find("file[filename='" + filename + "'][path='" + relativePath + "']").append("<stage>" + stageObjectAsJSON + "</stage>");
     }
 
+    /**
+    * Read the xml data for the project
+    *
+    * @param {Function} the callback function that is processed after the xml file is read entirly from the HDD
+    * @param {String} filename
+    * @param {String} relative path of the file
+    * @method readXmlFileData
+    */
     function readXmlFileData(callback) {
-        //load xml-Datei oder erstellen, falls nix vorhanden
         var fullProjectPath = ProjectManager.getProjectRoot().fullPath;
         var fileEntry = new NativeFileSystem.FileEntry(fullProjectPath + xmlFilename);
         FileUtils.readAsText(fileEntry).done(function (data, readTimestamp) {
@@ -874,15 +1040,20 @@ define(function (require, exports, module) {
                 callback.call(this); // brings the scope to the callback
             }
         }).fail(function (err) {
-            createProjectNode(fullProjectPath);
+            _createProjectNode(fullProjectPath); // create a new project node if there is no entry in the xml file
             if (typeof callback === 'function') {
                 callback.call(this);
             }
         });
-        
     }
 
-    function saveSketchesAndImages(sketchingArea) {
+    /**
+    * Save all data from the sketching area in the xml file (sketches and images)
+    *
+    * @param {Object} sketchingArea to save
+    * @method _saveSketchesAndImages
+    */
+    function _saveSketchesAndImages(sketchingArea) {
         var sketchingActionsAsJSON = JSON.stringify(sketchingArea.sketchArea.actions);
         var stageObjectAsJSON = sketchingArea.stage.toJSON();
         var filename = sketchingArea.filename;
@@ -893,107 +1064,82 @@ define(function (require, exports, module) {
         var nodeForActiveFile;
 
         //check if node for activeFile is already in the xml
-        fileNode = checkIfFileNodeExists(filename, relativePath);
+        fileNode = _checkIfFileNodeExists(filename, relativePath);
         if (!fileNode.html()) {
-            nodeForActiveFile = createFileNode(filename, relativePath);
+            nodeForActiveFile = _createFileNode(filename, relativePath);
             $xml.find("project").append(nodeForActiveFile);
         }
-        setSketchingActionsAtNode(sketchingActionsAsJSON, filename, relativePath);
-        setStageObjectAtNode(stageObjectAsJSON, filename, relativePath);
+        _setSketchingActionsAtNode(sketchingActionsAsJSON, filename, relativePath);
+        _setStageObjectAtNode(stageObjectAsJSON, filename, relativePath);
     }
     
-    function saveSketchesAndImagesOfAllAreas() {
+    /**
+    * Save all data from the sketching area in the xml file (sketches and images)
+    *
+    * @param {Object} sketchingArea to save
+    * @method _saveSketchesAndImagesOfAllAreas
+    */
+    function _saveSketchesAndImagesOfAllAreas() {
         $.each(_documentSketchingAreas, function (key, sketchingArea) {
-            saveSketchesAndImages(sketchingArea);
+            _saveSketchesAndImages(sketchingArea);
         });
     }
     
-    function writeXmlDataToFile() {
+    /**
+    * Write xml data to hdd
+    *
+    * @method _writeXmlDataToFile
+    */
+    function _writeXmlDataToFile() {
         var fileEntry = new NativeFileSystem.FileEntry(ProjectManager.getProjectRoot().fullPath + xmlFilename);
         FileUtils.writeText(fileEntry, "<root>" + $xml.html() + "</root>").done(function () {
         }).fail(function (err) {
             console.log("Error writing text: " + err.name);
         });
     }
-
-    function save(sketchingArea, callback) {
-        readXmlFileData(function () {
-            saveSketchesAndImages(sketchingArea);
-            var fileEntry = new NativeFileSystem.FileEntry(ProjectManager.getProjectRoot().fullPath + xmlFilename);
-            FileUtils.writeText(fileEntry, "<root>" + $xml.html() + "</root>").done(function () {
-                if (typeof callback === 'function') {
-                    callback.call(this);
-                }
-            }).fail(function (err) {
-                console.log("Error writing text: " + err.name);
-            });
-        });
+    
+    /**
+    * Save sketches and images of all sketching areas and write them to the file
+    *
+    * @method _saveAll
+    */
+    function _saveAll() {
+        _saveSketchesAndImagesOfAllAreas();
+        _writeXmlDataToFile();
     }
     
-    function saveAll() {
-        saveSketchesAndImagesOfAllAreas();
-        writeXmlDataToFile();
-    }
-    
-    function insertFileToImageArea(files) {
+    /**
+    * Insert all selected images to the stage
+    *
+    * @param {Array} an array of images selected from the add dialog
+    * @method _insertFileToImageArea
+    */
+    function _insertFileToImageArea(files) {
         $('.tools .layer').removeClass('selected');
         $('.tools .image-layer').addClass('selected');
         var i;
         for (i = 0; i < files.length; i++) {
-            addImageToStage(files[i]);
+            _addImageToStage(files[i]);
         }
     }
     
-    function saveMissionControl() {
+    /**
+    * Save Mission Control data in the xml container
+    *
+    * @method _saveMissionControl
+    */
+    function _saveMissionControl() {
         var missionControlAsJSON = missionControl.stage.toJSON();
         $xml.find("project").children("missioncontrol").remove();
         $xml.find("project").append("<missioncontrol>" + missionControlAsJSON + "</missioncontrol>");
     }
     
-    function SketchingArea() {
-        this.stage = null;
-        this.canvas = null;
-        this.canvasObj = null;
-        this.active = false;
-        this.id = 0;
-        this.width = 0;
-        this.height = 0;
-        this.overlay = null;
-        this.filename = null;
-        this.fullPath = null;
-        
-    }
-    
-    SketchingArea.prototype.init = function () {
-        this.id = _sketchingAreaIdCounter++;
-        this.height = $(EditorManager.getCurrentFullEditor().getScrollerElement()).height();
-        this.width = $(EditorManager.getCurrentFullEditor().getScrollerElement()).width();
-        this.width = myPanel.width();
-        // feste Breite ... entscheidung für Nutzer getroffen ... 1500px
-        //width = "1500";
-        // keine Ahnung warum 30px mehr sein muessen ... im Editor wird immer noch eine letzte Zeile angezeigt, die keine Zeilennummer hat, aber eine Hoehe
-        var totalHeight = EditorManager.getCurrentFullEditor().totalHeight();
-
-        this.overlay = ('<div class="overlay" id="overlay-' + this.id + '"><canvas class="simple_sketch" id="simple_sketch-' + this.id + '" width="' + this.width + '" height="' + this.totalHeight + '"></canvas></div>');
-        this.overlay.appendTo("#myPanel");
-        //$("#overlay-" + id).css('height', totalHeight + 'px');
-        this.canvas = $('#simple_sketch-' + this.id).sketch();
-
-        _addSketchingTools(this.id);
-        this.stage = createStage('overlay-' + this.id, myPanel.width(), this.totalHeight, this.path, this.filename);
-        this.filename = DocumentManager.getCurrentDocument().file.name;
-        this.fullPath = DocumentManager.getCurrentDocument().file.fullPath;
-        this.canvasObj = this.canvas.obj;
-        this.active = true;
-
-        if (!active) {
-            _deactivate();
-        }
-        var length = _documentSketchingAreas.push(this.canvas);
-        return length - 1;
-    };
-    
-    
+    /**
+    * Mission Control
+    *
+    * @class MissionControl
+    * @constructor
+    */
     function MissionControl() {
         this.overlay = $('<div id="missionControl"><div class="top controls"><a href="#" class="esc"></a></div><div class="bottom controls"><a href="#" class="reset-zoom"></a><a href="#" class="add"></a><a href="#" class="edit"></a></div></div>');
         this.active = false;
@@ -1008,16 +1154,25 @@ define(function (require, exports, module) {
         };
     }
     
+    /**
+    * Initialize the MissionControl
+    *
+    * @method init
+    */
     MissionControl.prototype.init = function () {
         this.overlay.appendTo("body");
-        this.stage = createStageForMissionControl("missionControl", $("body").width(), $("body").height());
+        this.stage = _createStageForMissionControl("missionControl", $("body").width(), $("body").height());
         this.imageLayering = new Kinetic.Layer({id: 'images'});
         this.stage.add(this.imageLayering);
         $('#missionControl .kineticjs-content').css('z-index', '21');
-        //$("#missionControl").css("margin-left", $("#sidebar").width());
         this.deactivateEditMode();
     };
     
+    /**
+    * Zooms the MissionControl according to the scroll event
+    *
+    * @method zoom
+    */
     MissionControl.prototype.zoom = function (event) {
         event.preventDefault();
         var evt = event.originalEvent,
@@ -1035,6 +1190,11 @@ define(function (require, exports, module) {
         this.scale *= zoom;
     };
     
+    /**
+    * Zooms in the MissionControl by clicking on the zoom in button
+    *
+    * @method zoom
+    */
     MissionControl.prototype.zoomIn = function () {
         var position = this.stage.getUserPosition();
         var scale = this.stage.getScale();
@@ -1042,6 +1202,11 @@ define(function (require, exports, module) {
         this.stage.draw();
     };
     
+    /**
+    * Zooms out the MissionControl by clicking on the zoom out button
+    *
+    * @method zoom
+    */
     MissionControl.prototype.zoomOut = function () {
         var position = this.stage.getUserPosition();
         var scale = this.stage.getScale();
@@ -1050,18 +1215,30 @@ define(function (require, exports, module) {
         //stage.setPosition(position.x - stage.getX(), position.y - stage.getY());
     };
     
+    /**
+    * Toggle the visibility of the MissionControl
+    *   - saves Mission Control data to the xml container
+    *   - writes xml data to the file
+    *
+    * @method toggle
+    */
     MissionControl.prototype.toggle = function () {
         if (this.active) {
             this.active = false;
             this.overlay.hide("puff"); //fadeOut("fast");
-            saveMissionControl();
-            writeXmlDataToFile();
+            _saveMissionControl();
+            _writeXmlDataToFile();
         } else {
             this.active = true;
             this.overlay.show("puff"); //fadeIn("fast");
         }
     };
     
+    /**
+    * Deactives the edit mode of Mission Control
+    *
+    * @method deactivateEditMode
+    */
     MissionControl.prototype.deactivateEditMode = function () {
         var anchors, magnets, groups;
         $("#missionControl .controls a.edit").removeClass("active");
@@ -1095,6 +1272,11 @@ define(function (require, exports, module) {
         this.stage.draw();
     };
     
+    /**
+    * Activates the edit mode of Mission Control
+    *
+    * @method activateEditMode
+    */
     MissionControl.prototype.activateEditMode = function () {
         var anchors, magnets, groups;
         $("#missionControl .controls a.edit").addClass("active");
@@ -1128,6 +1310,11 @@ define(function (require, exports, module) {
         this.stage.draw();
     };
     
+    /**
+    * Toggles the edit mode of Mission Control
+    *
+    * @method toggleEditMode
+    */
     MissionControl.prototype.toggleEditMode = function () {
         if (this.editMode) {
             this.deactivateEditMode();
@@ -1136,6 +1323,15 @@ define(function (require, exports, module) {
         }
     };
     
+    /**
+    * Adds an image to the Misson Control stage
+    *   - the image is loaded into the DOM
+    *   - the image is resized to fit the stage width if necessary
+    *   - anchors are added to the image
+    *   - if the image-path is similar to the project-path the path is made relative to support portability of project
+    *
+    * @method toggleEditMode
+    */
     MissionControl.prototype.addImage = function (imageToAdd) {
         var widthOfImage;
         var heightOfImage;
@@ -1204,10 +1400,10 @@ define(function (require, exports, module) {
             imageGroup.add(newImg);
             thisMissionControl.imageLayering.add(imageGroup);
     
-            addMissionControlAnchor(imageGroup, 0, 0, 'topLeft', deleteIcon);
-            addMissionControlAnchor(imageGroup, widthResized, 0, 'topRight', addIcon);
-            addMissionControlAnchor(imageGroup, widthResized, heightResized, 'bottomRight');
-            addMissionControlAnchor(imageGroup, 0, heightResized, 'bottomLeft');
+            _addMissionControlAnchor(imageGroup, 0, 0, 'topLeft', deleteIcon);
+            _addMissionControlAnchor(imageGroup, widthResized, 0, 'topRight', addIcon);
+            _addMissionControlAnchor(imageGroup, widthResized, heightResized, 'bottomRight');
+            _addMissionControlAnchor(imageGroup, 0, heightResized, 'bottomLeft');
             
             $('#tempImage').remove();
             thisMissionControl.stage.draw();
@@ -1217,6 +1413,11 @@ define(function (require, exports, module) {
         
     };
     
+    /**
+    * Resets all variables
+    *
+    * @method resetAllVariables
+    */
     function resetAllVariables() {
         _sketchingAreaIdCounter = 0;
         active = false;
@@ -1233,7 +1434,13 @@ define(function (require, exports, module) {
         missionControl = null;
     }
     
-    function setSizeOfMyPanel(space) {
+    /**
+    * Set the size of the side panel
+    *
+    * @param {Number} size of the panel in px
+    * @method _setSizeOfMyPanel
+    */
+    function _setSizeOfMyPanel(space) {
         var windowsWidth = $('.content').width();
         // subtract 30 pixels, due to new SideBar in Sprint 23 
         var widthOfMyPanel = (space > 0) ? (windowsWidth / space - 30) : 0;
@@ -1243,38 +1450,60 @@ define(function (require, exports, module) {
         myPanel.css("height", height);
     }
     
-    function hideMyPanel() {
+    /**
+    * Hide the side panel
+    *
+    * @method _hideMyPanel
+    */
+    function _hideMyPanel() {
         $('#editor-holder').css('margin-right', "0");
         myPanel.hide();
     }
     
-    function showMyPanel() {
+    /**
+    * Show the side panel and scroll to correct scroll position
+    *
+    * @method _showMyPanel
+    */
+    function _showMyPanel() {
         $('#editor-holder').css('margin-right', myPanel.width());
         myPanel.show();
         myPanel.scrollTop(_activeEditor.getScrollPos().y);
     }
     
+    /**
+    * Add side panel 
+    *
+    * @method _addMyPanel
+    */
     function _addMyPanel() {
         myPanel.insertAfter($('.content'));
         myPanel.mouseleave(function () {
             if (!$('.tools .edit').hasClass('selected')) {
                 myPanel.animate({ scrollTop: _activeEditor.getScrollPos().y }, 700);
                 setTimeout(function () {
-                    asyncScroll = false;
+                    _asyncScroll = false;
                 }, 750);
             }
         });
-        hideMyPanel();
+        _hideMyPanel();
     }
     
+    /**
+    * Toggle the status of the SketchMeister
+    *   - if active: deactivate, save all, and hide the side panel
+    *   - if not active: set the size of the panel, show the panel, activate, redraw sketching area and stage
+    *
+    * @method _toggleStatus
+    */
     function _toggleStatus() {
         if (active) {
             _deactivate();
-            saveAll();
-            hideMyPanel();
+            _saveAll();
+            _hideMyPanel();
         } else {
-            setSizeOfMyPanel(panelSize);
-            showMyPanel();
+            _setSizeOfMyPanel(panelSize);
+            _showMyPanel();
             _activate();
             if (!firstActivation) {
                 currentDocumentChanged(false);
@@ -1289,24 +1518,36 @@ define(function (require, exports, module) {
         }
     }
     
+    /**
+    * Initialization of the side panel 
+    *
+    * @method init
+    */
     function init() {
-        setSizeOfMyPanel(panelSize);
-        showMyPanel();
+        _setSizeOfMyPanel(panelSize);
+        _showMyPanel();
         myPanel.find("canvas").width(myPanel.width());
         _activeSketchingArea.sketchArea.redraw();
-        hideMyPanel();
+        _hideMyPanel();
     }
     
+    /**
+    * Add all handlers
+    *
+    * @method _addHandlers
+    */
     function _addHandlers() {
+        // the document changes
         $(DocumentManager).on("currentDocumentChange", function () {
             if (!_projectClosed) {
                 currentDocumentChanged(false);
             }
             if (active) {
-                saveAll();
+                _saveAll();
             }
         });
         
+        // a new project is opened
         $(ProjectManager).on("projectOpen", function () {
             setTimeout(function () {
                 _projectClosed = false;
@@ -1319,55 +1560,61 @@ define(function (require, exports, module) {
             }, 2000);
             
         });
+        
+        // bevfore the project is closed
         $(ProjectManager).on("beforeProjectClose", function () {
             _projectClosed = true;
             //save();
         });
         
+        // reset the size of the side panel on resizing the Brackets window
         $(window).resize(function () {
             if (active) {
-                setSizeOfMyPanel(panelSize);
+                _setSizeOfMyPanel(panelSize);
                 $('.tools').css('height', $(_activeEditor.getScrollerElement()).height() - 100);
             } else {
-                setSizeOfMyPanel(0);
+                _setSizeOfMyPanel(0);
             }
             missionControl.stage.setWidth($("body").width());
             missionControl.stage.setHeight($("body").height());
         });
         
+        // reset the size of the side panel if the active editor changes
         $(EditorManager).on("activeEditorChange", function () {
             if (active) {
-                setSizeOfMyPanel(panelSize);
+                _setSizeOfMyPanel(panelSize);
             } else {
-                setSizeOfMyPanel(0);
+                _setSizeOfMyPanel(0);
             }
         });
         
+        // save MissionControl and all sketches and stages if the document is saved
         $(DocumentManager).on("documentSaved", function () {
-            saveMissionControl();
-            saveSketchesAndImagesOfAllAreas();
-            writeXmlDataToFile();
+            _saveMissionControl();
+            _saveSketchesAndImagesOfAllAreas();
+            _writeXmlDataToFile();
         });
         
+        // toggle SketchMeister on clicking on the UI button
         $('#toggle-sketching').click(function () {
             _toggleStatus();
         });
         
+        // toggle MissionControl on clicking on the UI button
         $('#toggle-missionControl').click(function () {
             missionControl.toggle();
         });
 
-        $('.addImageToStage').click(function () {
-            addImageToStage(testImage);
-        });
+        // remove the overlay if a document is removed from the working set
+        $(DocumentManager).on("workingSetRemove", _removeOverlay);
 
-        $(DocumentManager).on("workingSetRemove", removeOverlay);
-
+        // panel is resized, move image layer and tools to top
         $('.overlay').on("panelResizeEnd", function () {
-            moveImageLayerToTop();
-            moveToolsToTop();
+            _moveImageLayerToTop();
+            _moveToolsToTop();
         });
         
+        // Add button of the MissionControl
         $('body').delegate('#missionControl .controls a.add', 'click', function () {
             NativeFileSystem.showOpenDialog(true, false, "Choose a file...", null, ['png', 'jpg', 'gif', 'jpeg'], function (files) {
                 $.each(files, function (key, image) {
@@ -1376,54 +1623,59 @@ define(function (require, exports, module) {
             }, function (err) {console.log(err); });
         });
         
+        // Mouse scroll event on the MissionControl
         $('body').delegate('#missionControl', 'mousewheel', function (event) {
-            
             missionControl.zoom(event);
         });
         
+        // Edit button of the MissionControl
         $('body').delegate('#missionControl .controls a.edit', 'click', function () {
             missionControl.toggleEditMode();
         });
         
+        // Escape button of the MissionControl
         $('body').delegate('#missionControl .controls a.esc', 'click', function () {
             missionControl.toggle();
         });
         
+        // Reset the zoom level of the MissionControl
         $('body').delegate('#missionControl .controls a.reset-zoom', 'click', function () {
             missionControl.stage.setScale(1.0, 1.0);
             missionControl.stage.draw();
         });
         
+        // If MissionControl is active and the ESC-Button pressed the Mission Control is deactivated
         $(document).keydown(function (e) {
             if (e.keyCode === 27 && missionControl.active) { // ESC was pressed and MissionControl is active
                 missionControl.toggle();
             }
         });
         
+        // Zoom in button of the MissionControl
         $('body').delegate('#missionControl .controls a.zoomin', 'click', function () {
             missionControl.zoomIn();
         });
         
+        // Zoom out button of the MissionControl
         $('body').delegate('#missionControl .controls a.zoomout', 'click', function () {
             missionControl.zoomOut();
         });
-
-        $('body').delegate('.redraw', 'click', function () {
-            _activeSketchingArea.stage = createStage('overlay-' + _activeSketchingArea.id, myPanel.width(), _activeSketchingArea.height, _activeSketchingArea.fullPath, _activeSketchingArea.filename);
-            _activeSketchingArea.stage.draw();
-        });
         
+        // highlight the clicked button on the tool bar
         $('body').delegate('.tools .button', 'click', function () {
             var id = _activeSketchingArea.id;
             $('#tools-' + id + ' .button').removeClass('selected');
             $(this).addClass('selected');
         });
+        
+        // highlight the eraser button on the tool bar
         $('body').delegate('.tools .eraser', 'click', function () {
             var id = _activeSketchingArea.id;
             $('#tools-' + id + ' .color').removeClass('selected');
             $(this).addClass('selected');
         });
 
+        // highlight the color button on the tool bar
         $('body').delegate('.tools .color', 'click', function () {
             var id = _activeSketchingArea.id;
             $('#tools-' + id + ' .edit').removeClass('selected');
@@ -1432,6 +1684,7 @@ define(function (require, exports, module) {
             $(this).addClass('selected');
         });
 
+        // Edit button on the tool bar
         $('body').delegate('.tools .edit', 'click', function () {
             var magnets, groups;
             if ($(this).hasClass('selected')) {
@@ -1439,10 +1692,10 @@ define(function (require, exports, module) {
                 _activeLayer = "image";
                 myPanel.animate({ scrollTop: _activeEditor.getScrollPos().y }, 700);
                 setTimeout(function () {
-                    asyncScroll = false;
+                    _asyncScroll = false;
                 }, 750);
                 $(this).removeClass('selected');
-                hideAnchors(_activeSketchingArea.stage);
+                _hideAnchors(_activeSketchingArea.stage);
                 
                 magnets = _activeStage.get(".magnet");
                 $.each(magnets, function (key, magnet) {
@@ -1455,9 +1708,9 @@ define(function (require, exports, module) {
             } else {
                 //activate edit mode
                 _activeLayer = "edit";
-                asyncScroll = true;
+                _asyncScroll = true;
                 $(this).addClass('selected');
-                showAnchors(_activeSketchingArea.stage);
+                _showAnchors(_activeSketchingArea.stage);
                 $('.tools .sketch-layer').removeClass('selected');
 
                 magnets = _activeStage.get(".magnet");
@@ -1471,18 +1724,20 @@ define(function (require, exports, module) {
             }
         });
 
+        // hightlight the stroke size button on the tool bar
         $('body').delegate('.tools .size', 'click', function () {
             var id = _activeSketchingArea.id;
             $('#tools-' + id + ' .size').removeClass('selected');
             $(this).addClass('selected');
         });
 
+        // add-image button on the tool bar
         $('body').delegate('.add-image', 'click', function () {
             var id = _activeSketchingArea.id;
             NativeFileSystem.showOpenDialog(true, false, "Choose a file...", null, ['png', 'jpg', 'gif', 'jpeg'], function (files) {
                 _activeLayer = "edit";
-                asyncScroll = true;
-                showAnchors(_activeSketchingArea.stage);
+                _asyncScroll = true;
+                _showAnchors(_activeSketchingArea.stage);
                 $('.tools .sketch-layer').removeClass('selected');
                 var magnets = _activeStage.get(".magnet");
                 $.each(magnets, function (key, magnet) {
@@ -1492,35 +1747,48 @@ define(function (require, exports, module) {
                 $.each(groups, function (key, group) {
                     group.setDraggable(true);
                 });
-                insertFileToImageArea(files);
+                _insertFileToImageArea(files);
             }, function (err) {});
         });
 
+        // change to image layer
         $('body').delegate('.image-layer', 'click', function () {
-            moveImageLayerToTop();
+            _moveImageLayerToTop();
         });
+        
+        // change to sketch layer
         $('body').delegate('.sketch-layer', 'click', function () {
             if (_activeLayer === "sketch") {
                 $(this).removeClass('selected');
-                moveImageLayerToTop();
+                _moveImageLayerToTop();
                 var id = _activeSketchingArea.id;
                 $('#tools-' + id + ' .color').removeClass('selected');
             } else {
                 $('.tools .edit').removeClass('selected');
                 $(this).addClass('selected');
-                hideAnchors(_activeSketchingArea.stage);
-                moveSketchingAreaToTop();
-                asyncScroll = false;
+                _hideAnchors(_activeSketchingArea.stage);
+                _moveSketchingAreaToTop();
+                _asyncScroll = false;
             }
             
         });
 
     }
-     
+    
+    /**
+    * Toggle the status of the MissionControl
+    *
+    * @method _toggleMissionControl
+    */
     function _toggleMissionControl() {
         missionControl.toggle();
     }
     
+    /**
+    * Add menu items to the Brackets menu bar to toggle SketchMeister and MissionControl
+    *
+    * @method _addMenuItems
+    */
     function _addMenuItems() {
         var viewMenu = Menus.getMenu(Menus.AppMenuBar.VIEW_MENU);
         viewMenu.addMenuDivider();
@@ -1538,8 +1806,9 @@ define(function (require, exports, module) {
     AppInit.appReady(function () {
         
         readXmlFileData(function () {
-            // deactivate LineWrapping, since otherwise height of editorWrapper is changed => cannot be mapped to the SketchingArea
+            // important: deactivate LineWrapping of CodeMirror, since otherwise height of editorWrapper is changed => cannot be mapped to the SketchingArea and async-scrolling is wrong
             Editor.setWordWrap(false);
+            
             _addMenuItems();
             _addToolbarIcon();
             _addHandlers();
